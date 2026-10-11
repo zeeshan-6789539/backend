@@ -5,7 +5,11 @@ import {
 } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { ErrorCode } from '../enums/error-code.enum.js';
-import { extractExceptionDetails, resolveStatusCode } from './exception.util.js';
+import {
+  describeError,
+  extractExceptionDetails,
+  resolveStatusCode,
+} from './exception.util.js';
 
 describe('extractExceptionDetails', () => {
   it('maps a not-found exception to its code and message', () => {
@@ -78,5 +82,20 @@ describe('resolveStatusCode', () => {
 
   it('falls back to 500 for anything else', () => {
     expect(resolveStatusCode(new Error('boom'))).toBe(500);
+  });
+});
+
+describe('describeError', () => {
+  it('surfaces the driver cause of a wrapped query error', () => {
+    const wrapped = new Error('Failed query: insert into "properties"\nparams: ...', {
+      cause: new Error('new row violates check constraint "x"'),
+    });
+
+    expect(describeError(wrapped)).toContain('new row violates check constraint "x"');
+  });
+
+  it('falls back to the message, or the value for non-errors', () => {
+    expect(describeError(new Error('plain'))).toBe('plain');
+    expect(describeError('text')).toBe('text');
   });
 });

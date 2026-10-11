@@ -30,7 +30,8 @@
     "db:push": "drizzle-kit push",
     "db:reset": "node scripts/reset-db.ts",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "pnpm build && node dist/database/seeds/run-seed.js"
+    "db:seed": "pnpm build && node dist/database/seeds/run-seed.js",
+    "db:seed:demo": "pnpm build && node dist/database/seeds/run-demo-seed.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

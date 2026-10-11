@@ -70,3 +70,15 @@ export const extractExceptionDetails = (
 
   return { message: 'The request could not be processed', code, details: [] };
 };
+
+// Driver errors arrive wrapped (e.g. DrizzleQueryError), so the real reason sits in `cause`
+export const describeError = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const cause = error.cause instanceof Error ? error.cause.message : undefined;
+  const firstLine = error.message.split('\n')[0];
+
+  return cause ? `${cause} (while running: ${firstLine.slice(0, 120)}…)` : error.message;
+};

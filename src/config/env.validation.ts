@@ -37,6 +37,10 @@ export const envSchema = z.object({
   SEED_SUPER_ADMIN_PASSWORD: z.string().min(8).max(128).optional(),
   SEED_SUPER_ADMIN_NAME: z.string().min(1).max(150).default('Super Admin'),
 
+  // Consumed only by `pnpm db:seed:demo`; its users sign in with SEED_SUPER_ADMIN_PASSWORD
+  SEED_DEMO_ADMIN_EMAIL: z.email().default('dealer@demo.local'),
+  SEED_DEMO_ADMIN_NAME: z.string().min(1).max(150).default('Demo Dealer'),
+
   MAIL_HOST: z.string().min(1),
   MAIL_PORT: z.coerce.number().int().positive().default(587),
   MAIL_SECURE: z.stringbool().default(false),

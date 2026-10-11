@@ -18,7 +18,14 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './modules/auth/guards/roles.guard.js';
 import { CompaniesModule } from './modules/companies/companies.module.js';
+import { AreasModule } from './modules/areas/areas.module.js';
+import { CitiesModule } from './modules/cities/cities.module.js';
+import { ContactsModule } from './modules/contacts/contacts.module.js';
+import { FacilitiesModule } from './modules/facilities/facilities.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { PropertiesModule } from './modules/properties/properties.module.js';
+import { PropertyRequirementsModule } from './modules/property-requirements/property-requirements.module.js';
+import { PropertyTypesModule } from './modules/property-types/property-types.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 @Module({
@@ -59,6 +66,13 @@ import { UsersModule } from './modules/users/users.module.js';
     AuthModule,
     UsersModule,
     CompaniesModule,
+    PropertyTypesModule,
+    FacilitiesModule,
+    ContactsModule,
+    CitiesModule,
+    AreasModule,
+    PropertiesModule,
+    PropertyRequirementsModule,
     HealthModule,
   ],
   providers: [

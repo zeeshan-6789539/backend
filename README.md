@@ -44,7 +44,8 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | `pnpm db:generate` | Generate a migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:push` | Push schema straight to the DB (dev only) |
-| `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
+| `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*`, the built-in property types and the built-in facilities (idempotent) |
+| `pnpm db:seed:demo` | Create a demo dealership with three months of dealer data from `SEED_DEMO_ADMIN_*`, signing in with `SEED_SUPER_ADMIN_PASSWORD` (dev only, skips if the demo admin exists) |
 | `pnpm db:studio` | Drizzle Studio |
 
 ## Folder structure
@@ -63,7 +64,7 @@ src/
 │   └── interfaces/
 ├── common/                     # Cross-cutting, domain-agnostic building blocks
 │   ├── constants/
-│   ├── decorators/             # @Public, @Roles, @CurrentUser, @SkipResponseTransform
+│   ├── decorators/             # @Public, @Roles, @CurrentUser, @CurrentCompanyId, @SkipResponseTransform
 │   ├── dto/                    # PaginationQueryDto, UuidParamDto
 │   ├── enums/
 │   ├── filters/                # AllExceptionsFilter
@@ -80,6 +81,13 @@ src/
     ├── auth/                   # Register, login, refresh rotation, logout, RBAC guards
     ├── users/                  # Controller → service → repository reference pattern
     ├── companies/              # Tenants — same shape as users
+    ├── property-types/         # Dealer: built-in + own property types
+    ├── facilities/             # Dealer: built-in + own facilities (bedrooms, attached bath, furnished...)
+    ├── contacts/               # Dealer: property owners and seekers
+    ├── cities/                 # Dealer: cities, each with an active area count
+    ├── areas/                  # Dealer: areas, each linked to one city
+    ├── properties/             # Dealer: sale and rent listings
+    ├── property-requirements/  # Dealer: seeker requests + matching listings
     └── health/                 # Terminus liveness/readiness
 ```
 
@@ -149,11 +157,49 @@ In production the filter never returns an internal error's message; it logs the 
 
 - `@Public()` opts a route out of authentication.
 - `@Roles(UserRole.SUPER_ADMIN, UserRole.CLIENT_ADMIN)` restricts a route to specific roles.
-- `@CurrentUser()` injects `{ id, username, role, companyId }`; `@CurrentUser('id')` injects one field.
+- `@CurrentUser()` injects `{ id, role, companyId }`; `@CurrentUser('id')` injects one field.
+- `@CurrentCompanyId()` injects the caller's `companyId` and returns 403 when the account has none — dealer routes use it to scope every query.
 
-Login uses **username, not email** — email is deliberately non-unique so several users can share one address. Roles are `super_admin` (platform-level, no company), `client_admin` (owns a company), `manager`, `staff`, `customer`.
+Login uses **email**, which is unique across all users. Roles are `super_admin` (platform-level, no company), `client_admin` (owns a company), `manager`, `staff`, `customer`.
 
 **Every `/users` and `/companies` route is `super_admin` only.** The restriction is declared once with `@Roles(UserRole.SUPER_ADMIN)` at the controller class, so a new route inherits it rather than having to remember it. The `/auth` routes stay open to their normal audiences — `register`, `login`, `refresh` and `logout` are public, `me` and `logout-all` need any authenticated user.
+
+## Property dealer (client_admin)
+
+A `client_admin` is a dealer, and their company is the dealership. Every dealer route is declared once with `@Roles(UserRole.CLIENT_ADMIN)` and scoped with `@CurrentCompanyId()`, so the company always comes from the token, never the request — a dealer can never read or change another dealer's rows. A record from another company answers 404, exactly like a missing one.
+
+| Route | Purpose |
+| --- | --- |
+| `/property-types` | Built-in types (`company_id` NULL, seeded, read-only) plus the dealer's own. Names are unique per dealer, case-insensitive, and cannot copy a built-in. |
+| `/facilities` | Same shape and rules as property types: seeded built-ins (`1 bedroom`, `Attached bath`, `Furnished`, …) plus the dealer's own. Listings and requirements of either purpose pick any number of them. |
+| `/contacts` | Owners and seekers, who never sign in. `phone` is required and unique per dealer. |
+| `/cities` | The dealer's cities. Names are unique per dealer, case-insensitive. Each response carries `areaCount` (active areas). A city cannot be deactivated while it still has active areas — 409 names the count. |
+| `/areas` | Areas, each linked to one of the dealer's active cities by `cityId`; responses include `cityName`. Names are unique per city, case-insensitive, so two cities may share an area name. Filter with `cityId` and `status`; search matches area and city name. `PATCH` can rename an area or move it to another active city; an area in a deactivated city cannot be reactivated. |
+| `/properties` | Listings with `purpose` `sale` or `rent`; `price` is the sale price or the monthly rent in whole rupees; area is in square feet. `cityId` is required and `areaId` optional; both must be active, and the area must belong to the city (the response also carries their names as `city` and `areaName`). Filters: purpose, type, property status, owner, `cityId`, `areaId`, price range, `facilityIds` (comma-separated; listing must have all of them), status. |
+| `/property-requirements` | What a walk-in wants: `buy` or `rent`, optional type, budget range, optional `preferredCityId`, `preferredAreaIds` (areas of that city — they need a city), `facilityIds`. Changing the city clears areas that were not resent. |
+| `GET /property-requirements/:id/matches` | Paginated active, `available` listings that fit: `buy` → `sale`, `rent` → `rent`, plus every criterion the requirement sets — the listing's city must be the preferred city, and when areas are set its area must be one of them; a listing must have every facility the requirement asks for. |
+| `PATCH /property-requirements/:id/match` | Body `{ propertyId }`. The seeker chose that listing: in one transaction it becomes `sold` (buy) or `rented` (rent), the requirement becomes `matched`, and `matched_property_id` links the two. Refused with 409 when the requirement is deactivated or already has a property, or the listing is deactivated or no longer `available`; 400 when the purposes don't fit. |
+
+Two lifecycle fields sit beside the usual `status` flag:
+
+- `properties.property_status` — `available` / `sold` / `rented`. A sale listing can only be sold and a rental only rented (service check plus `properties_status_matches_purpose`). `security_deposit` applies to rentals only and is cleared when a listing switches to sale.
+- `property_requirements.requirement_status` — `open` / `matched` / `closed`. `matched_property_id` (nullable) records the listing chosen through `/:id/match`.
+
+Both change through `PATCH /:id`; `/:id/match` changes both at once. Linking a deactivated type, contact or facility to a listing or requirement is refused with a 400 that names it; a facility deactivated after it was linked stays on the record.
+
+`properties.facilities` and `property_requirements.facilities` are `uuid[]` columns of facility ids, used for both sale and rent. The API takes them as `facilityIds` and returns `facilities: [{ id, name }]` sorted by name.
+
+### Demo data
+
+`pnpm db:seed:demo` creates **Demo Estate & Builders** and a `client_admin` who signs in with `SEED_DEMO_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD` — every seeded user shares the super admin password. Its rows are backdated across the last 92 days and cover every flow:
+
+- 3 custom property types (one deactivated) and 3 custom facilities (one deactivated) on top of the built-ins,
+- 16 contacts — owners, seekers, one who is both, one deactivated,
+- 4 cities with 19 areas — every city and area the listings use, one deactivated area (Shadman, Lahore) and one deactivated city (Multan) whose areas were deactivated first,
+- 22 properties — sale and rent; available, sold and rented; one without an owner; one deactivated; one on a deactivated custom type; facilities on sale and rent listings, including built-in and custom ones,
+- 12 requirements — buy and rent; open, matched and closed; one with any type; open ones with several matches and one with none.
+
+It refuses to run with `NODE_ENV=production` and skips if the demo admin already exists — run `pnpm db:reset` first to reseed. The dataset lives in [demo-dataset.ts](src/database/seeds/demo/demo-dataset.ts), and its spec checks that references, dates and listing rules stay consistent when you edit it.
 
 Refresh tokens are rotated on every use: the presented token is revoked and a new pair is issued. Each token is stored argon2-hashed and keyed by its `jti`. Presenting an already-revoked token is treated as a replay and revokes every session for that user.
 
@@ -161,10 +207,9 @@ Refresh tokens are rotated on every use: the presented token is revoked and a ne
 
 1. Edit or add a table under `src/database/schema/`.
 2. Export it from `src/database/schema/index.ts`.
-3. `pnpm db:generate` to produce a migration.
-4. Review the generated SQL, then `pnpm db:migrate`.
+3. `pnpm db:push` to apply the schema, then `pnpm db:seed` for seed data. No migration files are committed for schema changes; the schema files are the source of truth.
 
-Tables: `companies` (tenants) → `users` (nullable `company_id`, since `super_admin` is platform-level) → `refresh_tokens`.
+Tables: `companies` (tenants) → `users` (nullable `company_id`, since `super_admin` is platform-level) → `refresh_tokens`. Dealer tables, each with a `company_id`: `property_types` and `facilities` (nullable for built-ins), `contacts`, `cities` → `areas` (→ city), `properties` (→ type, owner contact, city, optional area, `created_by` user) and `property_requirements` (→ contact, optional type, optional preferred city; `preferred_area_ids` is a `uuid[]` of areas).
 
 Inject the typed client with `@Inject(DRIZZLE) private readonly db: IDrizzleDb`.
 

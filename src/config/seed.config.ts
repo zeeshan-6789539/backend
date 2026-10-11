@@ -11,5 +11,7 @@ export const seedConfig = registerAs(SEED_CONFIG_NAMESPACE, (): ISeedConfig => {
     superAdminEmail: env.SEED_SUPER_ADMIN_EMAIL,
     superAdminPassword: env.SEED_SUPER_ADMIN_PASSWORD,
     superAdminName: env.SEED_SUPER_ADMIN_NAME,
+    demoAdminEmail: env.SEED_DEMO_ADMIN_EMAIL,
+    demoAdminName: env.SEED_DEMO_ADMIN_NAME,
   };
 });
