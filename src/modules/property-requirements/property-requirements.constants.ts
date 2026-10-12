@@ -1,5 +1,6 @@
 import { PropertyPurpose } from '../../common/enums/property-purpose.enum.js';
 import { RequirementPurpose } from '../../common/enums/requirement-purpose.enum.js';
+import type { IMatchCriteria } from './interfaces/i-match-criteria.js';
 
 // Database constraint name -> the message a client should see when it trips
 export const PROPERTY_REQUIREMENT_CONSTRAINT_MESSAGES: Record<string, string> = {
@@ -26,4 +27,20 @@ export const LISTING_PURPOSE_FOR_REQUIREMENT: Record<
 > = {
   [RequirementPurpose.BUY]: PropertyPurpose.SALE,
   [RequirementPurpose.RENT]: PropertyPurpose.RENT,
+};
+
+export const MATCH_LEVELS = [100, 75, 50, 25, 0] as const;
+
+export const DEFAULT_MATCH_LEVEL = 75;
+
+// Each lower level drops one more group of criteria; purpose, available and active always apply
+export const MATCH_CRITERIA_BY_LEVEL: Record<
+  (typeof MATCH_LEVELS)[number],
+  IMatchCriteria
+> = {
+  100: { propertyType: true, city: true, area: true, budget: true, facilities: true },
+  75: { propertyType: true, city: true, area: true, budget: true, facilities: false },
+  50: { propertyType: true, city: true, area: false, budget: true, facilities: false },
+  25: { propertyType: true, city: true, area: false, budget: false, facilities: false },
+  0: { propertyType: false, city: false, area: false, budget: false, facilities: false },
 };

@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import { PropertyStatus } from '../../common/enums/property-status.enum.js';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
 import { buildPaginatedResult } from '../../common/utils/pagination.util.js';
@@ -21,9 +20,13 @@ import type { CreatePropertyRequirementDto } from './dto/create-property-require
 import type { MatchPropertyRequirementDto } from './dto/match-property-requirement.dto.js';
 import type { PropertyRequirementResponseDto } from './dto/property-requirement-response.dto.js';
 import type { QueryPropertyRequirementsDto } from './dto/query-property-requirements.dto.js';
+import type { QueryRequirementMatchesDto } from './dto/query-requirement-matches.dto.js';
 import type { UpdatePropertyRequirementDto } from './dto/update-property-requirement.dto.js';
 import { toPropertyRequirementResponse } from './mappers/property-requirement.mapper.js';
-import { LISTING_PURPOSE_FOR_REQUIREMENT } from './property-requirements.constants.js';
+import {
+  LISTING_PURPOSE_FOR_REQUIREMENT,
+  MATCH_CRITERIA_BY_LEVEL,
+} from './property-requirements.constants.js';
 import { PropertyRequirementsRepository } from './property-requirements.repository.js';
 
 @Injectable()
@@ -123,13 +126,14 @@ export class PropertyRequirementsService {
     return toPropertyRequirementResponse(row);
   }
 
-  // Active, available listings that satisfy every criterion the seeker gave
+  // Active, available listings that satisfy the criteria the chosen match level keeps
   async findMatches(
     companyId: string,
     id: string,
-    query: PaginationQueryDto,
+    query: QueryRequirementMatchesDto,
   ): Promise<IPaginatedResult<PropertyResponseDto>> {
     const requirement = await this.findRowOrFail(companyId, id);
+    const criteria = MATCH_CRITERIA_BY_LEVEL[query.matchLevel];
 
     return this.propertiesService.findPage({
       companyId,
@@ -138,14 +142,16 @@ export class PropertyRequirementsService {
       search: query.search,
       sortOrder: query.sortOrder,
       purpose: LISTING_PURPOSE_FOR_REQUIREMENT[requirement.purpose],
-      propertyTypeId: requirement.propertyTypeId ?? undefined,
+      propertyTypeId: criteria.propertyType
+        ? (requirement.propertyTypeId ?? undefined)
+        : undefined,
       propertyStatus: PropertyStatus.AVAILABLE,
       status: true,
-      cityId: requirement.preferredCityId ?? undefined,
-      areaIds: requirement.preferredAreaIds,
-      minPrice: requirement.budgetMin ?? undefined,
-      maxPrice: requirement.budgetMax ?? undefined,
-      facilityIds: requirement.facilities,
+      cityId: criteria.city ? (requirement.preferredCityId ?? undefined) : undefined,
+      areaIds: criteria.area ? requirement.preferredAreaIds : undefined,
+      minPrice: criteria.budget ? (requirement.budgetMin ?? undefined) : undefined,
+      maxPrice: criteria.budget ? (requirement.budgetMax ?? undefined) : undefined,
+      facilityIds: criteria.facilities ? requirement.facilities : undefined,
     });
   }
 

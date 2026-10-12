@@ -14,7 +14,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator.js';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import { UuidParamDto } from '../../common/dto/uuid-param.dto.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
@@ -23,6 +22,7 @@ import { CreatePropertyRequirementDto } from './dto/create-property-requirement.
 import { MatchPropertyRequirementDto } from './dto/match-property-requirement.dto.js';
 import { PropertyRequirementResponseDto } from './dto/property-requirement-response.dto.js';
 import { QueryPropertyRequirementsDto } from './dto/query-property-requirements.dto.js';
+import { QueryRequirementMatchesDto } from './dto/query-requirement-matches.dto.js';
 import { UpdatePropertyRequirementDto } from './dto/update-property-requirement.dto.js';
 import { PropertyRequirementsService } from './property-requirements.service.js';
 
@@ -75,12 +75,12 @@ export class PropertyRequirementsController {
   @ApiOperation({
     summary: 'Properties that fit this requirement (client_admin only)',
     description:
-      'Active, available listings: buy matches sale and rent matches rent, plus type, budget, city, area and every requested facility when set.',
+      'Active, available listings: buy matches sale and rent matches rent. matchLevel 100 also requires type, city, area, budget and every facility; 75 (default) ignores facilities; 50 also ignores area; 25 also ignores budget; 0 also ignores type and city.',
   })
   findMatches(
     @CurrentCompanyId() companyId: string,
     @Param() params: UuidParamDto,
-    @Query() query: PaginationQueryDto,
+    @Query() query: QueryRequirementMatchesDto,
   ): Promise<IPaginatedResult<PropertyResponseDto>> {
     return this.propertyRequirementsService.findMatches(companyId, params.id, query);
   }
