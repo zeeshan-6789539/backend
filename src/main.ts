@@ -3,9 +3,10 @@ import { RequestMethod, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import compression from 'compression';
 import helmet from 'helmet';
-import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { setupSwagger } from './bootstrap/swagger.bootstrap.js';
+import { createRequestLogger } from './common/middleware/request-logger.middleware.js';
+import { createAppLogger } from './common/utils/logger.util.js';
 import { interopDefault } from './common/utils/module.util.js';
 import { appConfig } from './config/app.config.js';
 import type { IAppConfig } from './config/interfaces/i-app-config.js';
@@ -14,9 +15,10 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const config = app.get<IAppConfig>(appConfig.KEY);
 
-  app.useLogger(app.get(Logger));
+  app.useLogger(createAppLogger(config));
   // Nest only auto-flushes inside the listen callback, which never fires on Vercel, so logs would stay buffered forever
   app.flushLogs();
+  app.use(createRequestLogger(['/health']));
   app.use(interopDefault(helmet)());
   app.use(compression());
   app.enableCors({ origin: config.corsOrigins, credentials: true });

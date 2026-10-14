@@ -1,15 +1,13 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { LoggerModule } from 'nestjs-pino';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor.js';
 import { appConfig } from './config/app.config.js';
 import { databaseConfig } from './config/database.config.js';
 import { validateEnv } from './config/env.validation.js';
-import type { IAppConfig } from './config/interfaces/i-app-config.js';
 import { jwtConfig } from './config/jwt.config.js';
 import { mailConfig } from './config/mail.config.js';
 import { seedConfig } from './config/seed.config.js';
@@ -29,31 +27,6 @@ import { UsersModule } from './modules/users/users.module.js';
       validate: validateEnv,
       load: [appConfig, databaseConfig, jwtConfig, mailConfig, seedConfig],
       envFilePath: ['.env.local', '.env'],
-    }),
-    LoggerModule.forRootAsync({
-      inject: [appConfig.KEY],
-      useFactory: (config: IAppConfig) => ({
-        pinoHttp: {
-          level: config.logLevel,
-          transport:
-            config.nodeEnv === 'development'
-              ? { target: 'pino-pretty', options: { singleLine: true } }
-              : undefined,
-          redact: ['req.headers.authorization', 'req.headers.cookie'],
-          autoLogging: {
-            ignore: (req) => req.url?.includes('/health') ?? false,
-          },
-        },
-      }),
-    }),
-    ThrottlerModule.forRootAsync({
-      imports: [ConfigModule.forFeature(appConfig)],
-      inject: [appConfig.KEY],
-      useFactory: (config: IAppConfig) => ({
-        throttlers: [
-          { ttl: config.throttleTtlMs, limit: config.throttleLimit },
-        ],
-      }),
     }),
     DatabaseModule,
     AuthModule,
@@ -76,7 +49,7 @@ import { UsersModule } from './modules/users/users.module.js';
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: TimeoutInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
