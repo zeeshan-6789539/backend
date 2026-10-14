@@ -2,6 +2,8 @@
 allowBuilds:
   esbuild: true
   '@scarf/scarf': false
+  '@google/genai': false
+  protobufjs: false
 
 # @nestjs/throttler still declares a Nest 11 peer ceiling; drop this once it ships v12 support
 peerDependencyRules:

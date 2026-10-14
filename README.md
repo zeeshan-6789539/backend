@@ -61,6 +61,7 @@ src/
 │   ├── app.config.ts           # registerAs('app')
 │   ├── database.config.ts      # registerAs('database')
 │   ├── jwt.config.ts           # registerAs('jwt')
+│   ├── ai.config.ts            # registerAs('ai') — Gemini key, Live model, session TTL
 │   └── interfaces/
 ├── common/                     # Cross-cutting, domain-agnostic building blocks
 │   ├── constants/
@@ -88,6 +89,7 @@ src/
     ├── areas/                  # Dealer: areas, each linked to one city
     ├── properties/             # Dealer: sale and rent listings
     ├── property-requirements/  # Dealer: seeker requests + matching listings
+    ├── assistant/              # Ephemeral Gemini Live tokens for the voice assistant
     └── health/                 # Terminus liveness/readiness
 ```
 
@@ -188,6 +190,12 @@ Two lifecycle fields sit beside the usual `status` flag:
 Both change through `PATCH /:id`; `/:id/match` changes both at once. Linking a deactivated type, contact or facility to a listing or requirement is refused with a 400 that names it; a facility deactivated after it was linked stays on the record.
 
 `properties.facilities` and `property_requirements.facilities` are `uuid[]` columns of facility ids, used for both sale and rent. The API takes them as `facilityIds` and returns `facilities: [{ id, name }]` sorted by name.
+
+## Voice assistant (Gemini Live)
+
+`POST /assistant/session` (`super_admin` and `client_admin`, throttled to 10 a minute) issues a **single-use ephemeral Gemini Live token** so the browser can open a voice session straight to Gemini. The real API key (`GOOGLE_STUDIO_KEY`) never leaves the server: the token must open its session within 60 seconds and the session stops after `GEMINI_SESSION_TTL_MINUTES`. The response is `{ token, model, expiresAt }`.
+
+The backend does no AI work itself. Gemini's tool calls run in the browser and go through the normal REST routes with the user's own JWT, so the role guards and company scoping above still apply to anything said by voice. Without `GOOGLE_STUDIO_KEY` the API still boots, and the route answers 503 with a message saying which variable to set; a key Gemini rejects answers 502.
 
 ### Demo data
 

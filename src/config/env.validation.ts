@@ -47,6 +47,11 @@ export const envSchema = z.object({
   MAIL_USER: z.string().min(1),
   MAIL_PASSWORD: z.string().min(1),
   MAIL_FROM: z.email().default('no-reply@rms.local'),
+
+  // Optional so the API boots without it; the voice assistant answers 503 until it is set
+  GOOGLE_STUDIO_KEY: z.string().min(1).optional(),
+  GEMINI_LIVE_MODEL: z.string().min(1).default('gemini-3.8-live'),
+  GEMINI_SESSION_TTL_MINUTES: z.coerce.number().int().min(1).max(120).default(30),
 });
 
 // Fails fast at bootstrap with every invalid variable listed at once

@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor.js';
+import { aiConfig } from './config/ai.config.js';
 import { appConfig } from './config/app.config.js';
 import { databaseConfig } from './config/database.config.js';
 import { validateEnv } from './config/env.validation.js';
@@ -19,6 +20,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './modules/auth/guards/roles.guard.js';
 import { CompaniesModule } from './modules/companies/companies.module.js';
 import { AreasModule } from './modules/areas/areas.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { CitiesModule } from './modules/cities/cities.module.js';
 import { ContactsModule } from './modules/contacts/contacts.module.js';
 import { FacilitiesModule } from './modules/facilities/facilities.module.js';
@@ -34,7 +36,7 @@ import { UsersModule } from './modules/users/users.module.js';
       isGlobal: true,
       cache: true,
       validate: validateEnv,
-      load: [appConfig, databaseConfig, jwtConfig, mailConfig, seedConfig],
+      load: [appConfig, databaseConfig, jwtConfig, mailConfig, seedConfig, aiConfig],
       envFilePath: ['.env.local', '.env'],
     }),
     LoggerModule.forRootAsync({
@@ -73,6 +75,7 @@ import { UsersModule } from './modules/users/users.module.js';
     AreasModule,
     PropertiesModule,
     PropertyRequirementsModule,
+    AssistantModule,
     HealthModule,
   ],
   providers: [
