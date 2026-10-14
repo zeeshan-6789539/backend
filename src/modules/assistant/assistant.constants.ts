@@ -3,7 +3,7 @@ export const ASSISTANT_NEW_SESSION_WINDOW_MS = 60_000;
 
 export const ASSISTANT_TOKEN_API_VERSION = 'v1alpha';
 
-export const ASSISTANT_SESSION_THROTTLE = { limit: 10, ttl: 60_000 };
+export const ASSISTANT_SESSION_THROTTLE = { limit: 10, ttlMs: 60_000 };
 
 export const ASSISTANT_MESSAGES = {
   notConfigured:

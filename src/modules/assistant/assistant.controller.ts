@@ -1,6 +1,6 @@
 import { Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator.js';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
@@ -17,7 +17,7 @@ export class AssistantController {
 
   @Post('session')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: ASSISTANT_SESSION_THROTTLE })
+  @RateLimit(ASSISTANT_SESSION_THROTTLE.limit, ASSISTANT_SESSION_THROTTLE.ttlMs)
   @ResponseMessage('Voice session created successfully')
   @ApiOperation({
     summary: 'Issue a single-use Gemini Live token for the voice assistant',

@@ -8,10 +8,10 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator.js';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator.js';
 import { UserResponseDto } from '../users/dto/user-response.dto.js';
 import { AuthService } from './auth.service.js';
@@ -42,7 +42,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @RateLimit(5, 60000)
   @ResponseMessage('Signed in successfully')
   @ApiOperation({ summary: 'Exchange credentials for a token pair' })
   login(
