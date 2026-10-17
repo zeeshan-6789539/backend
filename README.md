@@ -14,15 +14,19 @@ This project uses **pnpm only** — `packageManager` is pinned in `package.json`
 
 ```bash
 pnpm install
-cp .env.example .env     # then fill in DATABASE_URL and the two JWT secrets
+cp .env.example .env     # then fill in DATABASE_URL, the two JWT secrets and MAIL_*
 pnpm db:push             # pushes src/database/schema straight to the database
-pnpm db:seed             # creates the super admin from SEED_SUPER_ADMIN_*
+pnpm db:seed             # creates the super admin from SEED_SUPER_ADMIN_* (set SEED_SUPER_ADMIN_PASSWORD first)
 pnpm start:dev
 ```
 
-- API: `http://localhost:3000/api/v1`
-- Swagger UI: `http://localhost:3000/docs`
-- Probes: `http://localhost:3000/health/liveness`, `/health/readiness`
+With `PORT=5000` from `.env.example` (the port the frontend expects):
+
+- API: `http://localhost:5000/api/v1`
+- Swagger UI: `http://localhost:5000/docs`
+- Probes: `http://localhost:5000/health/liveness`, `/health/readiness`
+
+Without `PORT` set, the server falls back to `3000`. See [Configuration](#configuration) for every variable.
 
 Generate a JWT secret with:
 
@@ -35,15 +39,19 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | Script | What it does |
 | --- | --- |
 | `pnpm start:dev` | Watch-mode dev server |
+| `pnpm start:debug` | Watch-mode dev server with the debugger attached |
 | `pnpm build` | Compile to `dist/` |
 | `pnpm start:prod` | Run the compiled build |
 | `pnpm lint` | oxlint with type-aware rules |
 | `pnpm format` | Prettier over `src/` and `test/` |
 | `pnpm test` | Unit tests (vitest) |
+| `pnpm test:watch` | Unit tests in watch mode |
+| `pnpm test:cov` | Unit tests with coverage |
 | `pnpm test:e2e` | End-to-end tests |
 | `pnpm db:generate` | Generate a migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:push` | Push schema straight to the DB (dev only) |
+| `pnpm db:reset` | Truncate every table in `DATABASE_URL`'s `public` schema, keeping the schema (refuses with `NODE_ENV=production`) |
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*`, the built-in property types and the built-in facilities (idempotent) |
 | `pnpm db:seed:demo` | Create a demo dealership with three months of dealer data from `SEED_DEMO_ADMIN_*`, signing in with `SEED_SUPER_ADMIN_PASSWORD` (dev only, skips if the demo admin exists) |
 | `pnpm db:studio` | Drizzle Studio |
@@ -248,4 +256,43 @@ API responses carry ISO-8601 with a `Z` suffix (`2026-09-15T16:47:42.146Z`), bec
 
 ## Configuration
 
-All environment variables are declared in [`src/config/env.validation.ts`](src/config/env.validation.ts). Startup fails with every invalid variable listed at once, so a missing secret never surfaces as a runtime error later. Add a new variable there first, then expose it through the relevant `registerAs` namespace.
+All environment variables are declared in [`src/config/env.validation.ts`](src/config/env.validation.ts). Startup fails with every invalid variable listed at once, so a missing secret never surfaces as a runtime error later. Add a new variable there first, then expose it through the relevant `registerAs` namespace, and add it to [`.env.example`](.env.example) and the table below.
+
+Variables are read from `.env.local` first, then `.env`; the first file that sets a variable wins.
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `NODE_ENV` | | `development` | `development`, `test` or `production` |
+| `PORT` | | `3000` | HTTP port (`.env.example` uses `5000`, which the frontend expects) |
+| `API_PREFIX` | | `api` | Global route prefix |
+| `API_VERSION` | | `1` | URI version, so routes live under `/api/v1` |
+| `CORS_ORIGINS` | | `*` | Comma-separated allowed origins; include the frontend (`http://localhost:5001`) |
+| `REQUEST_TIMEOUT_MS` | | `15000` | Per-request timeout |
+| `LOG_LEVEL` | | `info` | `fatal`, `error`, `warn`, `info`, `debug` or `trace` |
+| `SWAGGER_ENABLED` | | `true` | Serve Swagger UI |
+| `SWAGGER_PATH` | | `docs` | Swagger UI path |
+| `THROTTLE_TTL_MS` | | `60000` | Rate-limit window |
+| `THROTTLE_LIMIT` | | `100` | Requests allowed per window |
+| `DATABASE_URL` | ✔ | | Postgres connection string |
+| `DATABASE_POOL_MAX` | | `10` | Max pool connections |
+| `DATABASE_SSL` | | `false` | Connect over SSL |
+| `DATABASE_LOG_QUERIES` | | `false` | Log every SQL query |
+| `JWT_ACCESS_SECRET` | ✔ | | Access-token secret, at least 32 chars |
+| `JWT_ACCESS_EXPIRES_IN` | | `15m` | Access-token lifetime |
+| `JWT_REFRESH_SECRET` | ✔ | | Refresh-token secret, at least 32 chars, different from the access secret |
+| `JWT_REFRESH_EXPIRES_IN` | | `7d` | Refresh-token lifetime |
+| `JWT_ISSUER` | | `rms-backend` | `iss` claim |
+| `SEED_SUPER_ADMIN_EMAIL` | | `superadmin@rms.local` | Super admin created by `pnpm db:seed` |
+| `SEED_SUPER_ADMIN_PASSWORD` | for seeding | | Password (8–128 chars) for every seeded user |
+| `SEED_SUPER_ADMIN_NAME` | | `Super Admin` | Super admin display name |
+| `SEED_DEMO_ADMIN_EMAIL` | | `dealer@demo.local` | Demo dealer created by `pnpm db:seed:demo` |
+| `SEED_DEMO_ADMIN_NAME` | | `Demo Dealer` | Demo dealer display name |
+| `MAIL_HOST` | ✔ | | SMTP host for welcome and password-change emails |
+| `MAIL_PORT` | | `587` | SMTP port |
+| `MAIL_SECURE` | | `false` | Use TLS from the start (usually `true` for port 465) |
+| `MAIL_USER` | ✔ | | SMTP username |
+| `MAIL_PASSWORD` | ✔ | | SMTP password |
+| `MAIL_FROM` | | `no-reply@rms.local` | Sender address |
+| `GOOGLE_STUDIO_KEY` | | | Google AI Studio key for the voice assistant; without it `POST /assistant/session` answers 503 |
+| `GEMINI_LIVE_MODEL` | | `gemini-3.8-live` | Gemini Live model |
+| `GEMINI_SESSION_TTL_MINUTES` | | `30` | Voice session lifetime, 1–120 |
