@@ -69,6 +69,32 @@ describe('DEMO_DATASET', () => {
     }
   });
 
+  it('links every matched requirement to a closed listing that existed first', () => {
+    for (const requirement of requirements) {
+      const title = requirement.matchedPropertyTitle;
+
+      if (requirement.requirementStatus === RequirementStatus.MATCHED) {
+        expect(title, requirement.contactKey).toBeDefined();
+      }
+
+      if (title === undefined) {
+        continue;
+      }
+
+      const property = properties.find((row) => row.title === title);
+
+      expect(property, title).toBeDefined();
+      expect(property?.propertyStatus, title).not.toBe(PropertyStatus.AVAILABLE);
+      expect(property?.createdDaysAgo ?? 0, title).toBeGreaterThanOrEqual(
+        requirement.updatedDaysAgo ?? requirement.createdDaysAgo,
+      );
+    }
+  });
+
+  it('uses unique property titles so requirements can reference them', () => {
+    expect(new Set(properties.map((row) => row.title)).size).toBe(properties.length);
+  });
+
   it('only references facilities that exist before the record', () => {
     const defaultNames = new Set(DEFAULT_FACILITIES);
     const customDays = new Map(facilities.map((facility) => [facility.name, facility.createdDaysAgo]));

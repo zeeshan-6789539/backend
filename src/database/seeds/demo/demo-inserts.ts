@@ -251,11 +251,12 @@ export const insertDemoCities = async (
   };
 };
 
+// Returns property title -> id so requirements can point at the listing they matched
 export const insertDemoProperties = async (
   tx: IDrizzleTransaction,
   context: IDemoSeedContext,
   demoProperties: readonly IDemoProperty[],
-): Promise<void> => {
+): Promise<Map<string, string>> => {
   const rows = demoProperties.map((property, index) => ({
     id: uuidv7(),
     companyId: context.companyId,
@@ -287,11 +288,14 @@ export const insertDemoProperties = async (
   }));
 
   await tx.insert(properties).values(rows);
+
+  return new Map(rows.map((row) => [row.title, row.id]));
 };
 
 export const insertDemoRequirements = async (
   tx: IDrizzleTransaction,
   context: IDemoSeedContext,
+  propertyIds: ReadonlyMap<string, string>,
   demoRequirements: readonly IDemoRequirement[],
 ): Promise<void> => {
   const rows = demoRequirements.map((requirement, index) => ({
@@ -317,6 +321,9 @@ export const insertDemoRequirements = async (
     facilities: requireIds(context.facilityIds, requirement.facilityNames, 'facility'),
     notes: requirement.notes ?? null,
     requirementStatus: requirement.requirementStatus,
+    matchedPropertyId: requirement.matchedPropertyTitle
+      ? requireId(propertyIds, requirement.matchedPropertyTitle, 'property')
+      : null,
     isActive: !requirement.isDeactivated,
     createdAt: daysAgo(requirement.createdDaysAgo, hourFor(index)),
     updatedAt: daysAgo(

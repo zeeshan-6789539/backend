@@ -42,7 +42,7 @@ export const seedDemo = async (
 
   if (existing) {
     logger.log(
-      `Demo dealer "${email}" already exists — run pnpm db:reset first to reseed from scratch`,
+      `Demo dealer "${email}" already exists — run pnpm db:reset and pnpm db:push first to reseed from scratch`,
     );
     return;
   }
@@ -63,8 +63,8 @@ export const seedDemo = async (
     const locationIds = await insertDemoCities(tx, companyId, dataset.cities);
     const context = { companyId, adminId, typeIds, facilityIds, contactIds, ...locationIds };
 
-    await insertDemoProperties(tx, context, dataset.properties);
-    await insertDemoRequirements(tx, context, dataset.requirements);
+    const propertyIds = await insertDemoProperties(tx, context, dataset.properties);
+    await insertDemoRequirements(tx, context, propertyIds, dataset.requirements);
   });
 
   const areaCount = dataset.cities.reduce((total, city) => total + city.areas.length, 0);

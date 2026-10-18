@@ -672,7 +672,7 @@ stateDiagram-v2
 | `pnpm db:push` | drizzle-kit | Applies the schema files to the database |
 | `pnpm db:seed` | `src/database/seeds/run-seed.ts` | Idempotent. Creates the `super_admin` user. |
 | `pnpm db:seed:demo` | `src/database/seeds/run-demo-seed.ts` | Blocked in production. Runs **one transaction** that inserts companies → users → property_types → contacts → facilities → cities/areas → properties → property_requirements, with timestamps backdated over several months. |
-| `pnpm db:reset` | `scripts/reset-db.ts` | Blocked in production. `TRUNCATE` of every public table with `RESTART IDENTITY CASCADE`. |
+| `pnpm db:reset` | `scripts/reset-db.ts` | Blocked in production. Connects to the `postgres` maintenance database, runs `DROP DATABASE ... WITH (FORCE)` then `CREATE DATABASE`; run `db:push` and `db:seed` afterwards. |
 
 There are no cron jobs or queues.
 

@@ -51,7 +51,7 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | `pnpm db:generate` | Generate a migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:push` | Push schema straight to the DB (dev only) |
-| `pnpm db:reset` | Truncate every table in `DATABASE_URL`'s `public` schema, keeping the schema (refuses with `NODE_ENV=production`) |
+| `pnpm db:reset` | Drop and recreate `DATABASE_URL`'s database (tables, triggers, functions, extensions, everything) so the next `db:push` builds it fresh. Connects via the `postgres` maintenance database, disconnects open sessions, and refuses with `NODE_ENV=production` |
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
 | `pnpm db:seed:demo` | Create a demo dealership with three months of dealer data from `SEED_DEMO_ADMIN_*`, signing in with `SEED_SUPER_ADMIN_PASSWORD` (dev only, skips if the demo admin exists) |
 | `pnpm db:studio` | Drizzle Studio |
@@ -215,7 +215,7 @@ The backend does no AI work itself. Gemini's tool calls run in the browser and g
 - 22 properties — sale and rent; available, sold and rented; one without an owner; one deactivated; one on a deactivated custom type; facilities on sale and rent listings, including default and custom ones,
 - 12 requirements — buy and rent; open, matched and closed; one with any type; open ones with several matches and one with none.
 
-It refuses to run with `NODE_ENV=production` and skips if the demo admin already exists — run `pnpm db:reset` first to reseed. The dataset lives in [demo-dataset.ts](src/database/seeds/demo/demo-dataset.ts), and its spec checks that references, dates and listing rules stay consistent when you edit it.
+It refuses to run with `NODE_ENV=production` and skips if the demo admin already exists — run `pnpm db:reset` and `pnpm db:push` first to reseed. The dataset lives in [demo-dataset.ts](src/database/seeds/demo/demo-dataset.ts), and its spec checks that references, dates and listing rules stay consistent when you edit it.
 
 Refresh tokens are rotated on every use: the presented token is revoked and a new pair is issued in one transaction, and if two requests race with the same token only one wins. Each token is stored as a SHA-256 hash (it is a long random JWT, so the slow argon2 used for passwords adds nothing) and keyed by its `jti`; the client IP is stored as `inet`. Presenting an already-revoked token is treated as a replay and revokes every session for that user.
 
@@ -286,11 +286,11 @@ Locally, variables are read from `.env` only (gitignored; copy it from `.env.exa
 | `JWT_REFRESH_SECRET` | ✔ | | Refresh-token secret, at least 32 chars, different from the access secret |
 | `JWT_REFRESH_EXPIRES_IN` | | `7d` | Refresh-token lifetime |
 | `JWT_ISSUER` | | `rms-backend` | `iss` claim |
-| `SEED_SUPER_ADMIN_EMAIL` | | `superadmin@rms.local` | Super admin created by `pnpm db:seed` |
+| `SEED_SUPER_ADMIN_EMAIL` | | `superadmin@mifa.mifa` | Super admin created by `pnpm db:seed` |
 | `SEED_SUPER_ADMIN_PASSWORD` | for seeding | | Password (8–128 chars) for every seeded user |
 | `SEED_SUPER_ADMIN_NAME` | | `Super Admin` | Super admin display name |
-| `SEED_DEMO_ADMIN_EMAIL` | | `dealer@demo.local` | Demo dealer created by `pnpm db:seed:demo` |
-| `SEED_DEMO_ADMIN_NAME` | | `Demo Dealer` | Demo dealer display name |
+| `SEED_DEMO_ADMIN_EMAIL` | | `clientadmin@mifa.mifa` | Demo client admin created by `pnpm db:seed:demo`; further seeded client admins use `clientadmin2@mifa.mifa`, `clientadmin3@mifa.mifa`, ... |
+| `SEED_DEMO_ADMIN_NAME` | | `Demo Client` | Demo client admin display name |
 | `MAIL_HOST` | ✔ | | SMTP host for welcome and password-change emails |
 | `MAIL_PORT` | | `587` | SMTP port |
 | `MAIL_SECURE` | | `false` | Use TLS from the start (usually `true` for port 465) |

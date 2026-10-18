@@ -21,25 +21,29 @@ if (!databaseName) {
   throw new Error(`DATABASE_URL has no database name: ${databaseUrl}`);
 }
 
-const target = new pg.Client({ connectionString: targetUrl.toString() });
-await target.connect();
+if (databaseName === 'postgres') {
+  throw new Error('reset-db refuses to drop the "postgres" maintenance database');
+}
+
+// A database cannot drop itself, so connect to the maintenance database instead
+const maintenanceUrl = new URL(targetUrl);
+maintenanceUrl.pathname = '/postgres';
+
+const maintenance = new pg.Client({ connectionString: maintenanceUrl.toString() });
+await maintenance.connect();
 
 try {
-  const { rows } = await target.query<{ server: string }>('select version() as server');
+  const { rows } = await maintenance.query<{ server: string }>('select version() as server');
   console.log(`Server: ${rows[0].server.split(',')[0]}`);
   console.log(`Target: ${databaseName} @ ${targetUrl.host}`);
 
-  const { rows: tables } = await target.query<{ tablename: string }>(
-    "select tablename from pg_tables where schemaname = 'public'",
-  );
+  const quotedName = maintenance.escapeIdentifier(databaseName);
 
-  if (tables.length === 0) {
-    console.log('No tables found — nothing to truncate');
-  } else {
-    const tableList = tables.map(({ tablename }) => `"${tablename}"`).join(', ');
-    await target.query(`truncate table ${tableList} restart identity cascade`);
-    console.log(`Truncated ${tables.length} table(s): ${tables.map((t) => t.tablename).join(', ')}`);
-  }
+  // FORCE disconnects open sessions such as a running dev server
+  await maintenance.query(`drop database if exists ${quotedName} with (force)`);
+  await maintenance.query(`create database ${quotedName}`);
+  console.log(`Dropped and recreated database "${databaseName}"`);
+  console.log('Next: pnpm db:push, then pnpm db:seed');
 } finally {
-  await target.end();
+  await maintenance.end();
 }

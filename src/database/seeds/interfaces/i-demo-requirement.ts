@@ -14,6 +14,8 @@ export interface IDemoRequirement {
   facilityNames?: string[];
   notes?: string;
   requirementStatus: RequirementStatus;
+  // Title of the sold or rented listing the seeker took; required when MATCHED
+  matchedPropertyTitle?: string;
   createdDaysAgo: number;
   updatedDaysAgo?: number;
   isDeactivated?: boolean;
