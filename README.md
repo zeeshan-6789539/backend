@@ -193,9 +193,9 @@ The generator uses RFC 9562's 12-bit counter method, so ids minted inside the sa
 
 Because ids are no longer v4, DTOs validate with `@IsUUID()` (any version) — `@IsUUID('4')` would reject every id this app now issues.
 
-### Lifecycle: `status`, not `deleted_at`
+### Lifecycle: `is_active`, not `deleted_at`
 
-There is no soft-delete timestamp and no separate `is_active` flag. Each row carries one boolean, `status` — `true` is active, `false` is deactivated.
+There is no soft-delete timestamp. Each row carries one boolean, the `is_active` column (`isActive` in the Drizzle schema) — `true` is active, `false` is deactivated. The API still exposes it as `status`, and the mappers translate between the two.
 
 `DELETE /users/:id` sets `status` to false and returns the updated row; `PATCH /users/:id/restore` sets it back to true. Rows are never physically removed, which keeps foreign keys and audit history intact. Reads (`findById`, `findByEmail`) deliberately do **not** filter on `status`, so an admin can still see and restore a deactivated user, while `login` and the JWT strategy reject `status: false` with an explicit message.
 

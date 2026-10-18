@@ -64,7 +64,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new UnauthorizedException(
         'This account has been deactivated. Contact an administrator to restore it.',
       );
@@ -116,7 +116,7 @@ export class AuthService {
 
     const row = await this.usersService.findRowOrFail(payload.sub);
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new UnauthorizedException(
         'This account has been deactivated. Contact an administrator to restore it.',
       );

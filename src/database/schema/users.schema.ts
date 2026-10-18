@@ -36,7 +36,7 @@ export const users = pgTable(
     role: userRoleEnum('role').notNull().default(UserRole.STAFF),
     // Single lifecycle flag: true is active, false is deactivated. Deleting a
     // user flips this to false — there is no separate deleted_at column.
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -50,7 +50,7 @@ export const users = pgTable(
     // email is the login identifier and must be unique
     uniqueIndex('users_email_unique_idx').on(table.email),
     index('users_role_idx').on(table.role),
-    index('users_status_idx').on(table.status),
+    index('users_is_active_idx').on(table.isActive),
     // Serves the default "latest first" listing without a sort step
     index('users_created_at_idx').on(table.createdAt.desc(), table.id.desc()),
     // Same, filtered to one tenant

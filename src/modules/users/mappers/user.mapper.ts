@@ -9,7 +9,7 @@ export const toUserResponse = (row: IUserRow): UserResponseDto => ({
   name: row.name,
   phone: row.phone,
   role: row.role,
-  status: row.status,
+  status: row.isActive,
   lastLoginAt: row.lastLoginAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,

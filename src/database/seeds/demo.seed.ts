@@ -16,7 +16,7 @@ export const DEMO_COMPANY: INewCompanyRow = {
   phone: '03001234567',
   address: '12 Shahrah-e-Faisal, Block 6',
   city: 'Karachi',
-  status: true,
+  isActive: true,
 };
 
 // Writes rows directly in one transaction so a failed admin insert leaves no orphan company
@@ -59,7 +59,7 @@ export const seedDemo = async (
       passwordHash,
       name: config.demoAdminName,
       role: UserRole.CLIENT_ADMIN,
-      status: true,
+      isActive: true,
     });
   });
 

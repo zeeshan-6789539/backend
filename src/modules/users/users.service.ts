@@ -41,7 +41,7 @@ export class UsersService {
       name: dto.name,
       phone: dto.phone,
       role,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     await this.mailService.sendWelcomeEmail(row.email, row.name, dto.password);
@@ -96,7 +96,7 @@ export class UsersService {
       name: dto.name,
       phone: dto.phone,
       role: dto.role,
-      status: dto.status,
+      isActive: dto.status,
       updatedAt: new Date(),
     });
 
@@ -121,7 +121,7 @@ export class UsersService {
   async remove(id: string): Promise<UserResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `User ${current.name} is already deactivated`,
       );
@@ -139,7 +139,7 @@ export class UsersService {
   async restore(id: string): Promise<UserResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`User ${current.name} is already active`);
     }
 

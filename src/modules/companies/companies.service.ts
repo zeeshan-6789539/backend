@@ -25,7 +25,7 @@ export class CompaniesService {
       phone: dto.phone,
       address: dto.address,
       city: dto.city,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toCompanyResponse(row);
@@ -65,7 +65,7 @@ export class CompaniesService {
       phone: dto.phone,
       address: dto.address,
       city: dto.city,
-      status: dto.status,
+      isActive: dto.status,
       updatedAt: new Date(),
     });
 
@@ -82,7 +82,7 @@ export class CompaniesService {
   async remove(id: string): Promise<CompanyResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `Company "${current.name}" is already deactivated`,
       );
@@ -102,7 +102,7 @@ export class CompaniesService {
   async restore(id: string): Promise<CompanyResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(
         `Company "${current.name}" is already active`,
       );

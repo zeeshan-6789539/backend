@@ -9,7 +9,7 @@ export const toCompanyResponse = (row: ICompanyRow): CompanyResponseDto => ({
   phone: row.phone,
   address: row.address,
   city: row.city,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

@@ -81,7 +81,7 @@ export class CompaniesRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(companies)
-        .set({ status })
+        .set({ isActive: status })
         .where(eq(companies.id, id))
         .returning();
 
@@ -97,7 +97,7 @@ export class CompaniesRepository {
     }
 
     if (options.status !== undefined) {
-      conditions.push(eq(companies.status, options.status));
+      conditions.push(eq(companies.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);
