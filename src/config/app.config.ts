@@ -10,6 +10,7 @@ export const appConfig = registerAs(APP_CONFIG_NAMESPACE, (): IAppConfig => {
 
   return {
     nodeEnv: env.NODE_ENV,
+    appName: env.APP_NAME,
     port: env.PORT,
     apiPrefix: env.API_PREFIX,
     apiVersion: env.API_VERSION,

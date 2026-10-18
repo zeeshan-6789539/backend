@@ -4,6 +4,7 @@ export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  APP_NAME: z.string().min(1).default('RMS'),
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().min(1).default('api'),
   API_VERSION: z.string().min(1).default('1'),

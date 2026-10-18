@@ -217,6 +217,7 @@ Variables are read from `.env.local` first, then `.env`; the first file that set
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `NODE_ENV` | | `development` | `development`, `test` or `production` |
+| `APP_NAME` | | `RMS` | Product name shown in emails (header, subjects, body) and the Swagger title |
 | `PORT` | | `3000` | HTTP port (`.env.example` uses `5000`, which the frontend expects) |
 | `API_PREFIX` | | `api` | Global route prefix |
 | `API_VERSION` | | `1` | URI version, so routes live under `/api/v1` |

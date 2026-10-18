@@ -7,7 +7,7 @@ export const setupSwagger = (
   config: IAppConfig,
 ): void => {
   const document = new DocumentBuilder()
-    .setTitle('RMS API')
+    .setTitle(`${config.appName} API`)
     .setDescription('Restaurant Management System backend')
     .setVersion(config.apiVersion)
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
