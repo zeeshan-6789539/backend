@@ -1,6 +1,5 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ChargeType } from '../../common/enums/charge-type.enum.js';
-import { SortOrder } from '../../common/enums/sort-order.enum.js';
 import { TransactionType } from '../../common/enums/transaction-type.enum.js';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
 import { runInBackground } from '../../common/utils/background.util.js';
@@ -13,7 +12,6 @@ import type { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto.js';
 import type { GenerateMonthlyRentResponseDto } from './dto/generate-monthly-rent-response.dto.js';
 import type { LedgerEntryResponseDto } from './dto/ledger-entry-response.dto.js';
 import type { QueryLedgerDto } from './dto/query-ledger.dto.js';
-import type { ILedgerEntryRow, ILedgerEntryWithBalance } from './interfaces/i-ledger-entry-row.js';
 import type { IDueLease } from './interfaces/i-due-lease.js';
 import type { ISkippedLease } from './interfaces/i-skipped-lease.js';
 import { LedgerRepository } from './ledger.repository.js';
@@ -33,14 +31,18 @@ export class LedgerService {
     companyId: string,
     query: QueryLedgerDto,
   ): Promise<IPaginatedResult<LedgerEntryResponseDto>> {
-    const entries = await this.buildStatement(companyId, query.leaseId, query.search, query.sortOrder);
-
-    const start = (query.page - 1) * query.limit;
-    const page = entries.slice(start, start + query.limit);
+    const { items, totalItems } = await this.ledgerRepository.findStatement({
+      companyId,
+      page: query.page,
+      limit: query.limit,
+      search: query.search,
+      leaseId: query.leaseId,
+      sortOrder: query.sortOrder,
+    });
 
     return buildPaginatedResult(
-      page.map(toLedgerEntryResponse),
-      entries.length,
+      items.map(toLedgerEntryResponse),
+      totalItems,
       query.page,
       query.limit,
     );
@@ -55,8 +57,7 @@ export class LedgerService {
       throw new NotFoundException(`No ledger entry was found with id ${id}`);
     }
 
-    const entries = await this.buildStatement(companyId, leaseId, undefined, SortOrder.DESC);
-    const entry = entries.find((row) => row.id === id);
+    const entry = await this.ledgerRepository.findStatementEntry(companyId, leaseId, id);
 
     if (!entry) {
       throw new NotFoundException(`No ledger entry was found with id ${id}`);
@@ -95,14 +96,18 @@ export class LedgerService {
 
   // Deactivating a charge (bill) keeps the row visible in the ledger but excludes it
   // from running-balance calculations; status goes false, the row is kept
-  async removeCharge(companyId: string, id: string): Promise<LedgerEntryResponseDto> {
+  async removeCharge(
+    companyId: string,
+    userId: string,
+    id: string,
+  ): Promise<LedgerEntryResponseDto> {
     const current = await this.findChargeRowOrFail(companyId, id);
 
     if (!current.isActive) {
       throw new ConflictException(`Charge ${current.id} is already deactivated`);
     }
 
-    const row = await this.ledgerRepository.setChargeStatus(id, companyId, false);
+    const row = await this.ledgerRepository.setChargeStatus(id, companyId, false, userId);
 
     if (!row) {
       throw new NotFoundException(`No charge was found with id ${id}`);
@@ -111,14 +116,18 @@ export class LedgerService {
     return this.findOne(companyId, row.id);
   }
 
-  async restoreCharge(companyId: string, id: string): Promise<LedgerEntryResponseDto> {
+  async restoreCharge(
+    companyId: string,
+    userId: string,
+    id: string,
+  ): Promise<LedgerEntryResponseDto> {
     const current = await this.findChargeRowOrFail(companyId, id);
 
     if (current.isActive) {
       throw new ConflictException(`Charge ${current.id} is already active`);
     }
 
-    const row = await this.ledgerRepository.setChargeStatus(id, companyId, true);
+    const row = await this.ledgerRepository.setChargeStatus(id, companyId, true, userId);
 
     if (!row) {
       throw new NotFoundException(`No charge was found with id ${id}`);
@@ -250,69 +259,6 @@ export class LedgerService {
         ),
       ),
     );
-  }
-
-  private async buildStatement(
-    companyId: string,
-    leaseId: string | undefined,
-    search: string | undefined,
-    sortOrder: SortOrder,
-  ): Promise<ILedgerEntryWithBalance[]> {
-    const [chargeRows, paymentRows] = await Promise.all([
-      this.ledgerRepository.findChargesForStatement(companyId, leaseId, search),
-      this.ledgerRepository.findPaymentsForStatement(companyId, leaseId, search),
-    ]);
-
-    const withBalance = this.attachRunningBalance([...chargeRows, ...paymentRows]);
-    const direction = sortOrder === SortOrder.ASC ? 1 : -1;
-
-    return withBalance.sort((a, b) => direction * this.compareForDisplay(a, b));
-  }
-
-  // Walks each lease's entries in insertion order to derive a running balance, since it isn't stored per-row
-  private attachRunningBalance(entries: ILedgerEntryRow[]): ILedgerEntryWithBalance[] {
-    const byLease = new Map<string, ILedgerEntryRow[]>();
-
-    for (const entry of entries) {
-      const group = byLease.get(entry.leaseId);
-
-      if (group) {
-        group.push(entry);
-      } else {
-        byLease.set(entry.leaseId, [entry]);
-      }
-    }
-
-    const result: ILedgerEntryWithBalance[] = [];
-
-    for (const group of byLease.values()) {
-      const chronological = [...group].sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-      );
-      let balance = 0;
-
-      for (const entry of chronological) {
-        // Deactivated entries stay visible but don't move the running balance
-        if (entry.status) {
-          balance +=
-            entry.transactionType === TransactionType.CREDIT ? -Number(entry.amount) : Number(entry.amount);
-        }
-
-        result.push({ ...entry, runningBalance: balance.toFixed(2) });
-      }
-    }
-
-    return result;
-  }
-
-  private compareForDisplay(a: ILedgerEntryWithBalance, b: ILedgerEntryWithBalance): number {
-    if (a.billingMonth !== b.billingMonth) {
-      if (a.billingMonth === null) return 1;
-      if (b.billingMonth === null) return -1;
-      return a.billingMonth < b.billingMonth ? 1 : -1;
-    }
-
-    return b.createdAt.getTime() - a.createdAt.getTime();
   }
 
   private currentBillingMonth(): string {

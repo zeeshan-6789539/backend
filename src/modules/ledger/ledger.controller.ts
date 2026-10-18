@@ -72,9 +72,10 @@ export class LedgerController {
   @ApiOperation({ summary: 'Set a charge (bill) status back to active' })
   restoreCharge(
     @CurrentCompanyId() companyId: string,
+    @CurrentUser('id') userId: string,
     @Param() params: UuidParamDto,
   ): Promise<LedgerEntryResponseDto> {
-    return this.ledgerService.restoreCharge(companyId, params.id);
+    return this.ledgerService.restoreCharge(companyId, userId, params.id);
   }
 
   // 200, not 204 — a 204 carries no body, so the envelope would never arrive
@@ -88,9 +89,10 @@ export class LedgerController {
   })
   removeCharge(
     @CurrentCompanyId() companyId: string,
+    @CurrentUser('id') userId: string,
     @Param() params: UuidParamDto,
   ): Promise<LedgerEntryResponseDto> {
-    return this.ledgerService.removeCharge(companyId, params.id);
+    return this.ledgerService.removeCharge(companyId, userId, params.id);
   }
 
   // super_admin only — overrides the class-level restriction, since this run spans every company

@@ -69,14 +69,14 @@ export class PaymentsService {
 
   // Deleting a payment deactivates it: status goes false, the row is kept and stays
   // visible in the ledger, but is excluded from running-balance calculations
-  async remove(companyId: string, id: string): Promise<PaymentResponseDto> {
+  async remove(companyId: string, userId: string, id: string): Promise<PaymentResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
     if (!current.status) {
       throw new ConflictException(`Payment ${current.id} is already deactivated`);
     }
 
-    const row = await this.paymentsRepository.setStatus(id, companyId, false);
+    const row = await this.paymentsRepository.setStatus(id, companyId, false, userId);
 
     if (!row) {
       throw new NotFoundException(`No payment was found with id ${id}`);
@@ -85,14 +85,14 @@ export class PaymentsService {
     return this.findOne(companyId, row.id);
   }
 
-  async restore(companyId: string, id: string): Promise<PaymentResponseDto> {
+  async restore(companyId: string, userId: string, id: string): Promise<PaymentResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
     if (current.status) {
       throw new ConflictException(`Payment ${current.id} is already active`);
     }
 
-    const row = await this.paymentsRepository.setStatus(id, companyId, true);
+    const row = await this.paymentsRepository.setStatus(id, companyId, true, userId);
 
     if (!row) {
       throw new NotFoundException(`No payment was found with id ${id}`);

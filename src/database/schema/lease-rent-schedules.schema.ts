@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   foreignKey,
   index,
@@ -23,7 +24,7 @@ export const leaseRentSchedules = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: 'restrict' }),
     leaseId: uuid('lease_id').notNull(),
-    rentAmount: numeric('rent_amount', { precision: 10, scale: 2 }).notNull(),
+    rentAmount: numeric('rent_amount', { precision: 14, scale: 2 }).notNull(),
     effectiveFrom: date('effective_from').notNull(),
     effectiveTo: date('effective_to'),
     isCurrent: boolean('is_current').notNull().default(true),
@@ -49,6 +50,11 @@ export const leaseRentSchedules = pgTable(
     uniqueIndex('lease_rent_schedules_current_per_lease_idx')
       .on(table.leaseId)
       .where(sql`${table.isCurrent} = true`),
+    check('lease_rent_schedules_rent_amount_positive_check', sql`${table.rentAmount} > 0`),
+    check(
+      'lease_rent_schedules_effective_range_check',
+      sql`${table.effectiveTo} is null or ${table.effectiveTo} >= ${table.effectiveFrom}`,
+    ),
   ],
 );
 

@@ -195,7 +195,7 @@ rms-backend/
     │   ├── database.module.ts     # Global module: DRIZZLE + PG_POOL, session pinned to UTC
     │   ├── schema/                # One file per table + barrel index.ts
     │   ├── interfaces/            # Row types inferred from the schema ($inferSelect / $inferInsert)
-    │   ├── migrations/            # Initial snapshot only; schema changes go through db:push
+    │   ├── migrations/            # Empty (.gitkeep); schema changes go through db:push
     │   └── seeds/                 # super admin seed, Pakistani demo dataset
     └── modules/                   # One folder per domain, same shape each time
         ├── auth/                  # register, login, refresh rotation, logout, me, JWT strategy, guards
@@ -356,7 +356,10 @@ erDiagram
     text description
     boolean is_active
     uuid created_by FK
+    timestamptz deactivated_at
+    uuid deactivated_by FK
     timestamptz created_at
+    timestamptz updated_at
   }
   payments {
     uuid id PK
@@ -374,7 +377,10 @@ erDiagram
     text notes
     boolean is_active
     uuid created_by FK
+    timestamptz deactivated_at
+    uuid deactivated_by FK
     timestamptz created_at
+    timestamptz updated_at
   }
 ```
 
@@ -383,15 +389,15 @@ erDiagram
 | Table | Purpose | Key constraints |
 | --- | --- | --- |
 | `companies` | A property-management company (the multi-tenant boundary) | `next_property_number` is the per-company counter for property numbers |
-| `users` | Login accounts | `users_email_unique_idx` (email is the login id); check `users_super_admin_has_no_company` |
+| `users` | Login accounts | `users_email_unique_idx` (email is the login id); checks `users_super_admin_has_no_company` and `users_email_lowercase_check` |
 | `refresh_tokens` | One row per issued refresh token, keyed by its `jti` | `ON DELETE CASCADE` from users |
 | `property_types` | A company's own list of property types (Home, Shop, ...) | Unique index `property_types_company_id_name_key` on `(company_id, lower(name))` |
 | `properties` | A rentable unit | Unique `(company_id, property_number)`; check `rent_due_day BETWEEN 1 AND 28`; `(property_type_id, company_id)` → `property_types(id, company_id)` |
 | `tenants` | A person who rents | — |
-| `leases` | Ties one tenant to one property for a date range | Partial unique index `leases_one_active_per_property_idx`: **at most one `active` lease per property** |
-| `lease_rent_schedules` | Rent amount history for a lease | Partial unique index: **at most one `is_current` schedule per lease** |
-| `charges` | The ledger's debits and credits (rent, bills, adjustments) | Partial unique index: **one active `monthly_rent` per lease per `billing_month`** |
-| `payments` | Money received against a lease | — |
+| `leases` | Ties one tenant to one property for a date range | Partial unique index `leases_one_active_per_property_idx`: **at most one `active` lease per property**; checks `end_date >= start_date`, `advance_amount >= 0` |
+| `lease_rent_schedules` | Rent amount history for a lease | Partial unique index: **at most one `is_current` schedule per lease**; checks `rent_amount > 0`, `effective_to >= effective_from` |
+| `charges` | The ledger's debits and credits (rent, bills, adjustments) | Partial unique index: **one active `monthly_rent` per `billing_month` per lease**; checks `amount >= 0` and "a `monthly_rent` has a `billing_month`" |
+| `payments` | Money received against a lease | Check `amount_paid > 0` |
 
 ### Enums
 
@@ -407,27 +413,36 @@ erDiagram
 
 ### Cross-company integrity
 
-`property_types`, `properties`, `tenants`, `leases` and `payments` each have a unique `(id, company_id)` key. Child tables reference the **pair**, not just the id:
+`property_types`, `properties`, `tenants` and `leases` each have a unique `(id, company_id)` key. Child tables reference the **pair**, not just the id:
 
 ```
 properties(property_type_id, company_id)   → property_types(id, company_id)
 leases(property_id, company_id)            → properties(id, company_id)
 leases(tenant_id, company_id)              → tenants(id, company_id)
 lease_rent_schedules(lease_id, company_id) → leases(id, company_id)
-charges / payments (property|tenant|lease, company_id) → same pairs
+charges / payments (property|tenant, company_id) → same pairs
+charges / payments (lease_id, property_id, tenant_id, company_id)
+                                           → leases(id, property_id, tenant_id, company_id)
 ```
 
-A lease, charge or payment therefore can't point at a row from another company, even if a service-layer check is missed.
+A lease, charge or payment therefore can't point at a row from another company, even if a service-layer check is missed. The four-column lease key also means a charge or payment can't name a property or tenant other than its lease's own.
 
 ### Indexes
 
-Every table has a `(created_at DESC, id DESC)` index, and company-scoped tables also have `(company_id, created_at DESC, id DESC)`. This serves the default newest-first listing without a sort step.
+Indexes exist only where a query uses them:
+
+- Company-scoped tables have `(company_id, created_at DESC, id DESC)`, which serves the default newest-first listing without a sort step. `companies` and `users` (listed platform-wide by the super admin) have `(created_at DESC, id DESC)`.
+- `payments` lists by payment date, so it has `(company_id, payment_date DESC, id DESC)`. The dashboard's recent payments and monthly totals use the same index.
+- `charges (lease_id, is_active, transaction_type, amount)` and `payments (lease_id, is_active, amount_paid)` serve lease filters and let the outstanding-balance sums read from the index alone.
+- There are no single-column indexes on booleans, small enums or names. They don't help (searches are `ILIKE '%term%'`, which a B-tree can't serve) and they slow down writes.
+
+See [DATABASE.md](DATABASE.md) for the full per-table list and the review behind it.
 
 ### Design rules
 
 - **Primary keys are UUIDv7** ([uuid.util.ts](src/common/utils/uuid.util.ts)). They are time-ordered, so inserts append to the B-tree like a sequence while ids stay globally unique and non-enumerable. They sort chronologically as strings. DTOs validate with `@IsUUID()` (any version); `@IsUUID('4')` would reject every id this app issues.
 - **`is_active`, not `deleted_at`.** One boolean column per row (`isActive` in the Drizzle schema): `true` is active and `false` is deactivated. `DELETE` sets it to false and `PATCH /:id/restore` sets it back. Rows are never physically removed. Reads do not filter on it, so an admin can still see and restore a row. Auth paths reject inactive users explicitly. The API still calls the field `status` (request bodies, `?status=` filters and responses); mappers translate between the two. Leases are the exception: they use `lease_status` instead.
-- **Money is `numeric(10,2)`**, sent and received as strings (`"2500.00"`), validated by `@IsMoneyString()`.
+- **Money is `numeric(14,2)`** (up to 999,999,999,999.99), sent and received as strings (`"2500.00"`), validated by `@IsMoneyString()`, which rejects more than 12 whole digits.
 - **Balances are computed, not stored.** [`OUTSTANDING_BALANCE_SQL`](src/common/utils/outstanding-balance.util.ts) is `Σ active debits − Σ active credits − Σ active payments` for a lease.
 - **UTC everywhere.** Columns are `timestamptz`, the PG session runs with `timezone=UTC`, the Node process sets `TZ=UTC` before anything else loads, and tests do the same. Calendar values (`start_date`, `billing_month`, `due_date`, ...) are plain `date`.
 
@@ -471,6 +486,7 @@ sequenceDiagram
 - Users sign in with **email** (unique, normalised to lower case).
 - The access token carries `{ sub, role, companyId }`. The refresh token carries `{ sub, jti }` and is stored argon2-hashed.
 - `POST /auth/logout` revokes one refresh token. `POST /auth/logout-all` revokes all of them. `GET /auth/me` returns the user plus `companyName` and `voiceAssistantEnabled`.
+- Each sign-in and refresh deletes that user's **expired** refresh tokens, so the table doesn't grow without bound. Revoked tokens that haven't expired are kept, because replay detection needs them.
 - `JwtAuthGuard` and `RolesGuard` are global, so every route is protected unless it has `@Public()`.
 
 ### 2. Platform setup (super_admin)
@@ -521,7 +537,7 @@ flowchart TD
 1. Sets the billing month to the first day of the current month.
 2. Loads every active lease with its current rent schedule, its property's `rent_due_day`, and the tenant's email.
 3. Skips leases with `no_rent_schedule` or `already_generated` for this month, and returns them in `skipped`.
-4. Inserts one `monthly_rent` debit per due lease, with `due_date = billing month + rent_due_day` and the description `Monthly rent for October 2026`. The partial unique index blocks duplicates from double clicks.
+4. Inserts one `monthly_rent` debit per due lease, with `due_date = billing month + rent_due_day` and the description `Monthly rent for October 2026`. Rows go in as multi-row inserts of 500, in one transaction. If a concurrent run already billed a lease, the partial unique index makes the insert skip it (`ON CONFLICT DO NOTHING`) instead of failing the whole run.
 5. Returns `{ billingMonth, generated, skipped }` straight away.
 6. **In the background** (kept alive on Vercel with `waitUntil`), emails a rent invoice to each tenant that has an email, but only for companies with `invoice_mail_send = true`. Mail goes out from **that company's own SMTP account**. A company with no email or mail password is skipped and the reason is logged. Sends are throttled to 5 concurrent connections. A mail failure never affects the billing run.
 
@@ -529,8 +545,8 @@ flowchart TD
 
 - **Charges** (`POST /ledger`) can be `electricity_bill`, `water_bill`, `maintenance_charge`, `other_charge`, `advance_payment` or `advance_refund` (all debits), or `discount_adjustment` (a credit). The property and tenant are taken from the lease.
 - **Payments** (`POST /payments`) record the amount, date, method and optional receipt or reference number, bank, cheque clearance date and notes.
-- **Statement** (`GET /ledger`) merges charges and payments into one list. A running balance is calculated per lease in insertion order: debits add, credits and payments subtract. Entries are shown newest billing month first.
-- **Deactivating** a charge (`DELETE /ledger/charges/:id`) or a payment (`DELETE /payments/:id`) keeps the row on the statement but leaves it out of every balance. Use `restore` to bring it back. Deactivating a `monthly_rent` charge lets the next run generate that month again.
+- **Statement** (`GET /ledger`) merges charges and payments into one list with a single SQL query (`UNION ALL`). The running balance is a window sum per lease in `(created_at, id)` order: debits add, credits and payments subtract. Sorting and paging also happen in the database, so only the requested page is loaded. Entries are shown newest billing month first.
+- **Deactivating** a charge (`DELETE /ledger/charges/:id`) or a payment (`DELETE /payments/:id`) keeps the row on the statement but leaves it out of every balance, and records who did it and when (`deactivated_by`, `deactivated_at`). Use `restore` to bring it back, which clears both. Deactivating a `monthly_rent` charge lets the next run generate that month again.
 
 ### 6. Dashboard
 

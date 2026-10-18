@@ -5,4 +5,5 @@ export const USER_CONSTRAINT_MESSAGES: Record<string, string> = {
     'The selected company does not exist or has been removed',
   users_super_admin_has_no_company:
     'A super_admin is platform-level and cannot belong to a company',
+  users_email_lowercase_check: 'The email address must be stored in lowercase',
 };

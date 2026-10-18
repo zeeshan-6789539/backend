@@ -1,9 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { ChargeType } from '../../common/enums/charge-type.enum.js';
 import { LeaseStatus } from '../../common/enums/lease-status.enum.js';
+import { SortOrder } from '../../common/enums/sort-order.enum.js';
 import { TransactionType } from '../../common/enums/transaction-type.enum.js';
+import { chunk } from '../../common/utils/array.util.js';
 import { withDatabaseErrors } from '../../common/utils/database-error.util.js';
+import { getOffset } from '../../common/utils/pagination.util.js';
 import { buildSearchCondition } from '../../common/utils/query.util.js';
 import { DRIZZLE } from '../../database/database.constants.js';
 import type { IChargeRow, INewChargeRow } from '../../database/interfaces/i-charge-row.js';
@@ -18,8 +21,12 @@ import {
   tenants,
 } from '../../database/schema/index.js';
 import type { IActiveLeaseForBilling } from './interfaces/i-active-lease-for-billing.js';
-import type { ILedgerEntryRow } from './interfaces/i-ledger-entry-row.js';
-import { CHARGE_CONSTRAINT_MESSAGES } from './ledger.constants.js';
+import type { IFindLedgerOptions } from './interfaces/i-find-ledger-options.js';
+import type { ILedgerEntryWithBalance } from './interfaces/i-ledger-entry-row.js';
+import type { ILedgerStatementRawRow } from './interfaces/i-ledger-statement-raw-row.js';
+import type { ILedgerStatementResult } from './interfaces/i-ledger-statement-result.js';
+import { CHARGE_CONSTRAINT_MESSAGES, MONTHLY_RENT_INSERT_BATCH_SIZE } from './ledger.constants.js';
+import { toLedgerEntry } from './mappers/ledger-entry.mapper.js';
 
 const SEARCHABLE_COLUMNS = [properties.name, tenants.name];
 
@@ -27,94 +34,42 @@ const SEARCHABLE_COLUMNS = [properties.name, tenants.name];
 export class LedgerRepository {
   constructor(@Inject(DRIZZLE) private readonly db: IDrizzleDb) {}
 
-  async findChargesForStatement(
-    companyId: string,
-    leaseId: string | undefined,
-    search: string | undefined,
-  ): Promise<ILedgerEntryRow[]> {
-    const where = this.buildStatementFilters(charges.companyId, charges.leaseId, companyId, leaseId, search);
+  // Charges and payments as one statement, with the per-lease running balance and paging done in SQL
+  async findStatement(options: IFindLedgerOptions): Promise<ILedgerStatementResult> {
+    const entries = this.statementEntriesSql(options.companyId, options.leaseId, options.search);
+    const order = this.statementOrderSql(options.sortOrder);
 
-    const rows = await this.db
-      .select({
-        id: charges.id,
-        companyId: charges.companyId,
-        propertyId: charges.propertyId,
-        tenantId: charges.tenantId,
-        leaseId: charges.leaseId,
-        entryType: charges.chargeType,
-        transactionType: charges.transactionType,
-        amount: charges.amount,
-        billingMonth: charges.billingMonth,
-        dueDate: charges.dueDate,
-        description: charges.description,
-        status: charges.isActive,
-        createdAt: charges.createdAt,
-        createdBy: charges.createdBy,
-        propertyName: properties.name,
-        tenantName: tenants.name,
-      })
-      .from(charges)
-      .innerJoin(properties, eq(charges.propertyId, properties.id))
-      .innerJoin(tenants, eq(charges.tenantId, tenants.id))
-      .where(where);
+    const [page, count] = await Promise.all([
+      this.db.execute<ILedgerStatementRawRow>(sql`
+        ${this.statementSelectSql(entries)}
+        ORDER BY ${order}
+        LIMIT ${options.limit} OFFSET ${getOffset(options.page, options.limit)}`),
+      this.db.execute<{ total: number }>(sql`
+        WITH entries AS (${entries})
+        SELECT count(*)::int AS "total" FROM entries`),
+    ]);
 
-    return rows.map((row) => ({ ...row, paymentId: null }));
+    return {
+      items: page.rows.map(toLedgerEntry),
+      totalItems: count.rows[0]?.total ?? 0,
+    };
   }
 
-  async findPaymentsForStatement(
+  // The balance is a window over the whole lease, so the id filter runs after it, not inside it
+  async findStatementEntry(
     companyId: string,
-    leaseId: string | undefined,
-    search: string | undefined,
-  ): Promise<ILedgerEntryRow[]> {
-    const where = this.buildStatementFilters(payments.companyId, payments.leaseId, companyId, leaseId, search);
+    leaseId: string,
+    id: string,
+  ): Promise<ILedgerEntryWithBalance | undefined> {
+    const entries = this.statementEntriesSql(companyId, leaseId, undefined);
 
-    const rows = await this.db
-      .select({
-        id: payments.id,
-        companyId: payments.companyId,
-        propertyId: payments.propertyId,
-        tenantId: payments.tenantId,
-        leaseId: payments.leaseId,
-        amount: payments.amountPaid,
-        dueDate: payments.paymentDate,
-        referenceNumber: payments.referenceNumber,
-        paymentMethod: payments.paymentMethod,
-        status: payments.isActive,
-        createdAt: payments.createdAt,
-        createdBy: payments.createdBy,
-        propertyName: properties.name,
-        tenantName: tenants.name,
-      })
-      .from(payments)
-      .innerJoin(properties, eq(payments.propertyId, properties.id))
-      .innerJoin(tenants, eq(payments.tenantId, tenants.id))
-      .where(where);
+    const result = await this.db.execute<ILedgerStatementRawRow>(sql`
+      ${this.statementSelectSql(entries)}
+      WHERE balanced."id" = ${id}`);
 
-    return rows.map((row) => {
-      const methodLabel = row.paymentMethod.replace(/_/g, ' ');
+    const [row] = result.rows;
 
-      return {
-        id: row.id,
-        companyId: row.companyId,
-        propertyId: row.propertyId,
-        tenantId: row.tenantId,
-        leaseId: row.leaseId,
-        paymentId: row.id,
-        entryType: 'payment_received' as const,
-        transactionType: TransactionType.CREDIT,
-        amount: row.amount,
-        billingMonth: null,
-        dueDate: row.dueDate,
-        description: row.referenceNumber
-          ? `Payment received (${methodLabel}) – ref ${row.referenceNumber}`
-          : `Payment received (${methodLabel})`,
-        status: row.status,
-        createdAt: row.createdAt,
-        createdBy: row.createdBy,
-        propertyName: row.propertyName,
-        tenantName: row.tenantName,
-      };
-    });
+    return row ? toLedgerEntry(row) : undefined;
   }
 
   async findChargeLeaseId(id: string, companyId: string): Promise<string | undefined> {
@@ -140,11 +95,16 @@ export class LedgerRepository {
     id: string,
     companyId: string,
     status: boolean,
+    userId: string,
   ): Promise<IChargeRow | undefined> {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(charges)
-        .set({ isActive: status })
+        .set({
+          isActive: status,
+          deactivatedAt: status ? null : new Date(),
+          deactivatedBy: status ? null : userId,
+        })
         .where(and(eq(charges.id, id), eq(charges.companyId, companyId)))
         .returning();
 
@@ -212,6 +172,7 @@ export class LedgerRepository {
     return new Set(rows.map((row) => row.leaseId));
   }
 
+  // A lease a concurrent run already billed is skipped by the unique index, so it is simply absent from the result
   async insertMonthlyRentCharges(rows: INewChargeRow[]): Promise<IChargeRow[]> {
     if (rows.length === 0) {
       return [];
@@ -222,17 +183,81 @@ export class LedgerRepository {
       return this.db.transaction(async (tx) => {
         const inserted: IChargeRow[] = [];
 
-        for (const row of rows) {
-          const [entry] = await tx.insert(charges).values(row).returning();
-
-          if (entry) {
-            inserted.push(entry);
-          }
+        for (const batch of chunk(rows, MONTHLY_RENT_INSERT_BATCH_SIZE)) {
+          inserted.push(...(await tx.insert(charges).values(batch).onConflictDoNothing().returning()));
         }
 
         return inserted;
       });
     }, CHARGE_CONSTRAINT_MESSAGES);
+  }
+
+  // Both halves share one column list so they can be UNION ALL-ed into a single statement
+  private statementEntriesSql(
+    companyId: string,
+    leaseId: string | undefined,
+    search: string | undefined,
+  ): SQL {
+    const chargeWhere = this.buildStatementFilters(charges.companyId, charges.leaseId, companyId, leaseId, search);
+    const paymentWhere = this.buildStatementFilters(payments.companyId, payments.leaseId, companyId, leaseId, search);
+
+    return sql`
+      SELECT ${charges.id} AS "id", ${charges.companyId} AS "companyId", ${charges.propertyId} AS "propertyId",
+        ${charges.tenantId} AS "tenantId", ${charges.leaseId} AS "leaseId",
+        ${properties.name} AS "propertyName", ${tenants.name} AS "tenantName",
+        NULL::uuid AS "paymentId", ${charges.chargeType}::text AS "entryType",
+        ${charges.transactionType}::text AS "transactionType", ${charges.amount} AS "amount",
+        ${charges.billingMonth} AS "billingMonth", ${charges.dueDate} AS "dueDate",
+        ${charges.description} AS "description", ${charges.isActive} AS "status",
+        ${charges.createdAt} AS "createdAt", ${charges.createdBy} AS "createdBy"
+      FROM ${charges}
+      INNER JOIN ${properties} ON ${properties.id} = ${charges.propertyId}
+      INNER JOIN ${tenants} ON ${tenants.id} = ${charges.tenantId}
+      WHERE ${chargeWhere}
+      UNION ALL
+      SELECT ${payments.id}, ${payments.companyId}, ${payments.propertyId},
+        ${payments.tenantId}, ${payments.leaseId},
+        ${properties.name}, ${tenants.name},
+        ${payments.id}, 'payment_received',
+        ${TransactionType.CREDIT}::text, ${payments.amountPaid},
+        NULL::date, ${payments.paymentDate},
+        'Payment received (' || replace(${payments.paymentMethod}::text, '_', ' ') || ')'
+          || CASE WHEN coalesce(${payments.referenceNumber}, '') <> ''
+            THEN ' – ref ' || ${payments.referenceNumber} ELSE '' END,
+        ${payments.isActive}, ${payments.createdAt}, ${payments.createdBy}
+      FROM ${payments}
+      INNER JOIN ${properties} ON ${properties.id} = ${payments.propertyId}
+      INNER JOIN ${tenants} ON ${tenants.id} = ${payments.tenantId}
+      WHERE ${paymentWhere}`;
+  }
+
+  // Deactivated entries stay listed but add 0, so the balance carries over them unchanged
+  private statementSelectSql(entries: SQL): SQL {
+    return sql`
+      WITH entries AS (${entries}),
+      balanced AS (
+        SELECT entries.*,
+          (SUM(CASE WHEN "status" THEN
+                 CASE WHEN "transactionType" = ${TransactionType.CREDIT} THEN -"amount" ELSE "amount" END
+               ELSE 0 END)
+            OVER (PARTITION BY "leaseId" ORDER BY "createdAt", "id" ROWS UNBOUNDED PRECEDING))::numeric(14, 2)
+            AS "runningBalance"
+        FROM entries
+      )
+      SELECT balanced."id", balanced."companyId", balanced."propertyId", balanced."tenantId", balanced."leaseId",
+        balanced."propertyName", balanced."tenantName", balanced."paymentId", balanced."entryType",
+        balanced."transactionType", balanced."amount", balanced."billingMonth"::text AS "billingMonth",
+        balanced."dueDate"::text AS "dueDate", balanced."description", balanced."status",
+        to_char(balanced."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
+        balanced."createdBy", balanced."runningBalance"
+      FROM balanced`;
+  }
+
+  // Newest billing month first, undated entries (payments, manual charges) after them, then newest created
+  private statementOrderSql(sortOrder: SortOrder): SQL {
+    return sortOrder === SortOrder.ASC
+      ? sql`balanced."billingMonth" ASC NULLS FIRST, balanced."createdAt" ASC, balanced."id" ASC`
+      : sql`balanced."billingMonth" DESC NULLS LAST, balanced."createdAt" DESC, balanced."id" DESC`;
   }
 
   private buildStatementFilters(

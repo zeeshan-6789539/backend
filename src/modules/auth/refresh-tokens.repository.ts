@@ -44,9 +44,15 @@ export class RefreshTokensRepository {
       );
   }
 
-  async deleteExpired(): Promise<void> {
+  // Revoked-but-unexpired rows are kept: refresh() needs them to detect a replayed token
+  async deleteExpiredForUser(userId: string): Promise<void> {
     await this.db
       .delete(refreshTokens)
-      .where(lt(refreshTokens.expiresAt, new Date()));
+      .where(
+        and(
+          eq(refreshTokens.userId, userId),
+          lt(refreshTokens.expiresAt, new Date()),
+        ),
+      );
   }
 }

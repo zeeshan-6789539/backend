@@ -1,5 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import {
+  check,
   date,
   foreignKey,
   index,
@@ -38,7 +39,7 @@ export const leases = pgTable(
     status: leaseStatusEnum('status').notNull().default(LeaseStatus.ACTIVE),
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
-    advanceAmount: numeric('advance_amount', { precision: 10, scale: 2 })
+    advanceAmount: numeric('advance_amount', { precision: 14, scale: 2 })
       .notNull()
       .default('0.00'),
     documentUrl: text('document_url'),
@@ -53,15 +54,22 @@ export const leases = pgTable(
   (table) => [
     index('leases_property_id_idx').on(table.propertyId),
     index('leases_tenant_id_idx').on(table.tenantId),
-    index('leases_status_idx').on(table.status),
-    index('leases_created_at_idx').on(table.createdAt.desc(), table.id.desc()),
     index('leases_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),
       table.id.desc(),
     ),
-    // Lets lease_rent_schedules/charges/payments composite-FK pin a row to this same company
+    // Lets lease_rent_schedules composite-FK pin a row to this same company
     unique('leases_id_company_id_key').on(table.id, table.companyId),
+    // Lets charges/payments composite-FK pin a row to this lease's own property, tenant and company
+    unique('leases_id_property_tenant_company_key').on(
+      table.id,
+      table.propertyId,
+      table.tenantId,
+      table.companyId,
+    ),
+    check('leases_end_after_start_check', sql`${table.endDate} >= ${table.startDate}`),
+    check('leases_advance_amount_non_negative_check', sql`${table.advanceAmount} >= 0`),
     // At most one active lease per property, enforced at the DB level to close the check-then-act race
     uniqueIndex('leases_one_active_per_property_idx')
       .on(table.propertyId)

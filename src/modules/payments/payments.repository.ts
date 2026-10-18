@@ -92,11 +92,16 @@ export class PaymentsRepository {
     id: string,
     companyId: string,
     status: boolean,
+    userId: string,
   ): Promise<IPaymentRow | undefined> {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(payments)
-        .set({ isActive: status })
+        .set({
+          isActive: status,
+          deactivatedAt: status ? null : new Date(),
+          deactivatedBy: status ? null : userId,
+        })
         .where(and(eq(payments.id, id), eq(payments.companyId, companyId)))
         .returning();
 

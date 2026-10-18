@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   foreignKey,
   index,
@@ -44,7 +45,7 @@ export const charges = pgTable(
     leaseId: uuid('lease_id').notNull(),
     chargeType: chargeTypeEnum('charge_type').notNull(),
     transactionType: transactionTypeEnum('transaction_type').notNull(),
-    amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
     billingMonth: date('billing_month'),
     dueDate: date('due_date'),
     description: text('description'),
@@ -52,19 +53,24 @@ export const charges = pgTable(
     // charge stays visible in the ledger but is excluded from running-balance calculations.
     isActive: boolean('is_active').notNull().default(true),
     createdBy: uuid('created_by').references(() => users.id),
+    // Who deactivated the charge and when; cleared again on restore
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    deactivatedBy: uuid('deactivated_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('charges_lease_id_created_at_idx').on(
+    // Serves the lease filter and lets the outstanding-balance sum read from the index alone
+    index('charges_lease_balance_idx').on(
       table.leaseId,
-      table.createdAt,
-    ),
-    index('charges_is_active_idx').on(table.isActive),
-    index('charges_created_at_idx').on(
-      table.createdAt.desc(),
-      table.id.desc(),
+      table.isActive,
+      table.transactionType,
+      table.amount,
     ),
     index('charges_company_created_at_idx').on(
       table.companyId,
@@ -72,10 +78,16 @@ export const charges = pgTable(
       table.id.desc(),
     ),
     // At most one *active* monthly_rent charge per lease per billing month, closing the generate-monthly-rent
-    // duplicate-click race. Scoped to is_active = true so deactivating a charge lets the next run regenerate it.
+    // duplicate-click race. billing_month leads so the "already generated this month" lookup can use it too.
     uniqueIndex('charges_one_monthly_rent_per_lease_month_idx')
-      .on(table.leaseId, table.billingMonth)
+      .on(table.billingMonth, table.leaseId)
       .where(sql`${table.chargeType} = 'monthly_rent' and ${table.isActive} = true`),
+    check('charges_amount_non_negative_check', sql`${table.amount} >= 0`),
+    // The unique index above skips NULL billing months, so a monthly rent must always carry one
+    check(
+      'charges_monthly_rent_has_billing_month_check',
+      sql`${table.chargeType} <> 'monthly_rent' or ${table.billingMonth} is not null`,
+    ),
     // Composite FKs pin property_id/tenant_id/lease_id to the same company_id as this charge
     foreignKey({
       columns: [table.propertyId, table.companyId],
@@ -87,10 +99,11 @@ export const charges = pgTable(
       foreignColumns: [tenants.id, tenants.companyId],
       name: 'charges_tenant_company_fk',
     }),
+    // Also pins property_id/tenant_id to the lease's own property and tenant
     foreignKey({
-      columns: [table.leaseId, table.companyId],
-      foreignColumns: [leases.id, leases.companyId],
-      name: 'charges_lease_company_fk',
+      columns: [table.leaseId, table.propertyId, table.tenantId, table.companyId],
+      foreignColumns: [leases.id, leases.propertyId, leases.tenantId, leases.companyId],
+      name: 'charges_lease_fk',
     }),
   ],
 );

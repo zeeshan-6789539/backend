@@ -1,8 +1,7 @@
 import type { ChargeType } from '../../../common/enums/charge-type.enum.js';
 import type { TransactionType } from '../../../common/enums/transaction-type.enum.js';
 
-// The unified statement row a lease's ledger is built from: either a charge or
-// a payment, normalized to the same shape so they can be merged and sorted together.
+// The unified statement row: a charge or a payment, normalized to one shape so they list together
 export interface ILedgerEntryRow {
   id: string;
   companyId: string;

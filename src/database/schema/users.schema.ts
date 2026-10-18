@@ -49,8 +49,6 @@ export const users = pgTable(
   (table) => [
     // email is the login identifier and must be unique
     uniqueIndex('users_email_unique_idx').on(table.email),
-    index('users_role_idx').on(table.role),
-    index('users_is_active_idx').on(table.isActive),
     // Serves the default "latest first" listing without a sort step
     index('users_created_at_idx').on(table.createdAt.desc(), table.id.desc()),
     // Same, filtered to one tenant
@@ -63,6 +61,8 @@ export const users = pgTable(
       'users_super_admin_has_no_company',
       sql`${table.role} <> 'super_admin' OR ${table.companyId} IS NULL`,
     ),
+    // The service lower-cases emails; this stops a mixed-case duplicate slipping in through raw SQL
+    check('users_email_lowercase_check', sql`${table.email} = lower(${table.email})`),
   ],
 );
 

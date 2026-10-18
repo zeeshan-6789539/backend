@@ -1,5 +1,11 @@
 import type { ILedgerEntryWithBalance } from '../interfaces/i-ledger-entry-row.js';
+import type { ILedgerStatementRawRow } from '../interfaces/i-ledger-statement-raw-row.js';
 import type { LedgerEntryResponseDto } from '../dto/ledger-entry-response.dto.js';
+
+export const toLedgerEntry = (row: ILedgerStatementRawRow): ILedgerEntryWithBalance => ({
+  ...row,
+  createdAt: new Date(row.createdAt),
+});
 
 export const toLedgerEntryResponse = (
   row: ILedgerEntryWithBalance,

@@ -33,12 +33,6 @@ export const tenants = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('tenants_name_idx').on(table.name),
-    index('tenants_is_active_idx').on(table.isActive),
-    index('tenants_created_at_idx').on(
-      table.createdAt.desc(),
-      table.id.desc(),
-    ),
     index('tenants_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),

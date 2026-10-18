@@ -197,14 +197,20 @@ export class AuthService {
 
     const decoded = this.jwtService.decode<{ exp: number }>(refreshToken);
 
-    await this.refreshTokensRepository.create({
-      id: jti,
-      userId: user.id,
-      tokenHash: await hashSecret(refreshToken),
-      expiresAt: new Date(decoded.exp * 1000),
-      userAgent: context.userAgent?.slice(0, 255),
-      ipAddress: context.ipAddress?.slice(0, 64),
-    });
+    const tokenHash = await hashSecret(refreshToken);
+
+    // Prunes this user's expired sessions on every sign-in and refresh, so the table can't grow without bound
+    await Promise.all([
+      this.refreshTokensRepository.create({
+        id: jti,
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(decoded.exp * 1000),
+        userAgent: context.userAgent?.slice(0, 255),
+        ipAddress: context.ipAddress?.slice(0, 64),
+      }),
+      this.refreshTokensRepository.deleteExpiredForUser(user.id),
+    ]);
 
     return { accessToken, refreshToken, tokenType: 'Bearer' };
   }

@@ -12,4 +12,4 @@ export const OUTSTANDING_BALANCE_SQL = sql<string>`(
   ), 0)
   -
   COALESCE((SELECT SUM(${payments.amountPaid}) FROM ${payments} WHERE ${payments.leaseId} = ${leases.id} AND ${payments.isActive} = true), 0)
-)::numeric(10, 2)`;
+)::numeric(14, 2)`;

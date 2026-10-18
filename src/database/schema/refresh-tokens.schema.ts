@@ -20,10 +20,7 @@ export const refreshTokens = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    index('refresh_tokens_user_id_idx').on(table.userId),
-    index('refresh_tokens_expires_at_idx').on(table.expiresAt),
-  ],
+  (table) => [index('refresh_tokens_user_id_idx').on(table.userId)],
 );
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({

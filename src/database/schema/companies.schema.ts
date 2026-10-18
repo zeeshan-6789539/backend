@@ -42,8 +42,6 @@ export const companies = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('companies_name_idx').on(table.name),
-    index('companies_is_active_idx').on(table.isActive),
     index('companies_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),

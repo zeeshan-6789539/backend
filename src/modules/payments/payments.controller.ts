@@ -71,9 +71,10 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Set status back to active' })
   restore(
     @CurrentCompanyId() companyId: string,
+    @CurrentUser('id') userId: string,
     @Param() params: UuidParamDto,
   ): Promise<PaymentResponseDto> {
-    return this.paymentsService.restore(companyId, params.id);
+    return this.paymentsService.restore(companyId, userId, params.id);
   }
 
   // 200, not 204 — a 204 carries no body, so the envelope would never arrive
@@ -87,8 +88,9 @@ export class PaymentsController {
   })
   remove(
     @CurrentCompanyId() companyId: string,
+    @CurrentUser('id') userId: string,
     @Param() params: UuidParamDto,
   ): Promise<PaymentResponseDto> {
-    return this.paymentsService.remove(companyId, params.id);
+    return this.paymentsService.remove(companyId, userId, params.id);
   }
 }

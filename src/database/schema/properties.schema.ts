@@ -47,13 +47,7 @@ export const properties = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('properties_name_idx').on(table.name),
-    index('properties_is_active_idx').on(table.isActive),
     index('properties_property_type_id_idx').on(table.propertyTypeId),
-    index('properties_created_at_idx').on(
-      table.createdAt.desc(),
-      table.id.desc(),
-    ),
     index('properties_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),

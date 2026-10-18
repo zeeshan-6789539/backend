@@ -43,7 +43,8 @@ No exceptions, including new modules added later.
 - The repository orders `direction(table.createdAt), direction(table.id)` and `sortOrder` defaults to `desc`, so **the newest record is first** unless the caller asks otherwise. `id` is the tiebreaker and is stable because ids are UUIDv7.
 - Search goes through `buildSearchCondition(term, columns)` — case-insensitive contains, wildcards escaped. Pass the columns that module wants searchable.
 - Count and page query run in one `Promise.all`, sharing the same `where`.
-- Give the table a `(created_at DESC, id DESC)` index so the default listing needs no sort step.
+- Give the table an index matching the default listing so it needs no sort step: `(company_id, created_at DESC, id DESC)` for a company-scoped table, `(created_at DESC, id DESC)` otherwise. If the list sorts by another column (payments sort by `payment_date`), index that instead.
+- Don't add single-column indexes on booleans, small enums or names. They don't serve `ILIKE '%term%'` search and only slow down writes. Add an index only for a query that uses it.
 
 ## Adding a module
 

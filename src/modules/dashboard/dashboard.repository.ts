@@ -2,10 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, gte, lt, sql } from 'drizzle-orm';
 import { DashboardTrendRange } from '../../common/enums/dashboard-trend-range.enum.js';
 import { LeaseStatus } from '../../common/enums/lease-status.enum.js';
-import { OUTSTANDING_BALANCE_SQL } from '../../common/utils/outstanding-balance.util.js';
+import { TransactionType } from '../../common/enums/transaction-type.enum.js';
 import { DRIZZLE } from '../../database/database.constants.js';
 import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
-import { leases, payments, properties, tenants } from '../../database/schema/index.js';
+import { charges, leases, payments, properties, tenants } from '../../database/schema/index.js';
 import {
   DASHBOARD_OUTSTANDING_LEASES_LIMIT,
   DASHBOARD_RECENT_PAYMENTS_LIMIT,
@@ -96,22 +96,10 @@ export class DashboardRepository {
         .innerJoin(tenants, eq(payments.tenantId, tenants.id))
         .innerJoin(properties, eq(payments.propertyId, properties.id))
         .where(eq(payments.companyId, companyId))
-        .orderBy(desc(payments.paymentDate), desc(payments.createdAt))
+        // id rather than created_at breaks ties (equivalent for UUIDv7), so the payment-date index serves the sort
+        .orderBy(desc(payments.paymentDate), desc(payments.id))
         .limit(DASHBOARD_RECENT_PAYMENTS_LIMIT),
-      this.db
-        .select({
-          id: leases.id,
-          propertyName: properties.name,
-          tenantName: tenants.name,
-          status: leases.status,
-          outstandingBalance: OUTSTANDING_BALANCE_SQL,
-        })
-        .from(leases)
-        .innerJoin(properties, eq(leases.propertyId, properties.id))
-        .innerJoin(tenants, eq(leases.tenantId, tenants.id))
-        .where(and(eq(leases.companyId, companyId), sql`${OUTSTANDING_BALANCE_SQL} > 0`))
-        .orderBy(sql`${OUTSTANDING_BALANCE_SQL} desc`)
-        .limit(DASHBOARD_OUTSTANDING_LEASES_LIMIT),
+      this.findOutstandingLeases(companyId),
     ]);
 
     return {
@@ -127,5 +115,47 @@ export class DashboardRepository {
       recentPayments,
       outstandingLeases,
     };
+  }
+
+  // Sums each lease's charges and payments once and joins them, instead of a correlated subquery per lease
+  private findOutstandingLeases(companyId: string) {
+    const due = this.db
+      .select({
+        leaseId: charges.leaseId,
+        total: sql<string>`sum(case when ${charges.transactionType} = ${TransactionType.DEBIT} then ${charges.amount} else -${charges.amount} end)`.as('due_total'),
+      })
+      .from(charges)
+      .where(and(eq(charges.companyId, companyId), eq(charges.isActive, true)))
+      .groupBy(charges.leaseId)
+      .as('due');
+
+    const paid = this.db
+      .select({
+        leaseId: payments.leaseId,
+        total: sql<string>`sum(${payments.amountPaid})`.as('paid_total'),
+      })
+      .from(payments)
+      .where(and(eq(payments.companyId, companyId), eq(payments.isActive, true)))
+      .groupBy(payments.leaseId)
+      .as('paid');
+
+    const outstanding = sql<string>`(coalesce(${due.total}, 0) - coalesce(${paid.total}, 0))::numeric(14, 2)`;
+
+    return this.db
+      .select({
+        id: leases.id,
+        propertyName: properties.name,
+        tenantName: tenants.name,
+        status: leases.status,
+        outstandingBalance: outstanding,
+      })
+      .from(leases)
+      .innerJoin(properties, eq(leases.propertyId, properties.id))
+      .innerJoin(tenants, eq(leases.tenantId, tenants.id))
+      .leftJoin(due, eq(due.leaseId, leases.id))
+      .leftJoin(paid, eq(paid.leaseId, leases.id))
+      .where(and(eq(leases.companyId, companyId), sql`${outstanding} > 0`))
+      .orderBy(sql`${outstanding} desc`)
+      .limit(DASHBOARD_OUTSTANDING_LEASES_LIMIT);
   }
 }
