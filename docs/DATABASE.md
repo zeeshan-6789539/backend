@@ -246,6 +246,7 @@ stateDiagram-v2
 | `pnpm db:migrate` | drizzle-kit | Applies pending migrations and records them in `drizzle.__drizzle_migrations` |
 | `pnpm db:push` | drizzle-kit | Applies the schema files directly, without a migration. Throwaway local prototyping only |
 | `pnpm db:seed` | `src/database/seeds/run-seed.ts` | Idempotent. Creates the `super_admin` user from `SEED_SUPER_ADMIN_*`. |
+| `pnpm db:seed:demo` | `src/database/seeds/run-demo-seed.ts` | Blocked in production. Skips if the demo admin exists. Runs **one transaction** that inserts a demo company, then its `client_admin` from `SEED_DEMO_ADMIN_*` (password `SEED_SUPER_ADMIN_PASSWORD`). |
 | `pnpm db:reset` | `scripts/reset-db.ts` | Blocked in production. Truncates every table in the `public` schema (`RESTART IDENTITY CASCADE`), keeping the schema; run `db:seed` afterwards. |
 
 There are no cron jobs or queues.

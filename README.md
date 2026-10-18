@@ -17,6 +17,7 @@ pnpm install
 cp .env.example .env     # then fill in DATABASE_URL, the two JWT secrets and MAIL_*
 pnpm db:migrate          # applies src/database/migrations to the database
 pnpm db:seed             # creates the super admin from SEED_SUPER_ADMIN_* (set SEED_SUPER_ADMIN_PASSWORD first)
+pnpm db:seed:demo        # optional: a demo company and its client admin from SEED_DEMO_ADMIN_*
 pnpm start:dev
 ```
 
@@ -53,6 +54,7 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | `pnpm db:push` | Push schema straight to the DB without a migration (throwaway local prototyping only — never production) |
 | `pnpm db:reset` | Truncate every table in `DATABASE_URL`'s `public` schema, keeping the schema (refuses with `NODE_ENV=production`) |
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
+| `pnpm db:seed:demo` | Create the "Demo Company" and a `client_admin` from `SEED_DEMO_ADMIN_*`, signing in with `SEED_SUPER_ADMIN_PASSWORD` (dev only, skips if the demo admin exists) |
 | `pnpm db:studio` | Drizzle Studio |
 
 ## Folder structure
@@ -240,6 +242,8 @@ Variables are read from `.env.local` first, then `.env`; the first file that set
 | `SEED_SUPER_ADMIN_EMAIL` | | `superadmin@rms.local` | Super admin created by `pnpm db:seed` |
 | `SEED_SUPER_ADMIN_PASSWORD` | for seeding | | Super admin password, 8–128 chars |
 | `SEED_SUPER_ADMIN_NAME` | | `Super Admin` | Super admin display name |
+| `SEED_DEMO_ADMIN_EMAIL` | | `clientadmin@mifa.mifa` | Demo client admin created by `pnpm db:seed:demo`; further seeded client admins use `clientadmin2@mifa.mifa`, `clientadmin3@mifa.mifa`, ... |
+| `SEED_DEMO_ADMIN_NAME` | | `Demo Client` | Demo client admin display name |
 | `MAIL_HOST` | ✔ | | SMTP host for welcome and password-change emails |
 | `MAIL_PORT` | | `587` | SMTP port |
 | `MAIL_SECURE` | | `false` | Use TLS from the start (usually `true` for port 465) |
