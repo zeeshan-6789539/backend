@@ -15,7 +15,7 @@ This project uses **pnpm only** — `packageManager` is pinned in `package.json`
 ```bash
 pnpm install
 cp .env.example .env     # then fill in DATABASE_URL, the two JWT secrets and MAIL_*
-pnpm db:push             # pushes src/database/schema straight to the database
+pnpm db:migrate          # applies src/database/migrations to the database
 pnpm db:seed             # creates the super admin from SEED_SUPER_ADMIN_* (set SEED_SUPER_ADMIN_PASSWORD first)
 pnpm start:dev
 ```
@@ -50,8 +50,8 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | `pnpm test:e2e` | End-to-end tests |
 | `pnpm db:generate` | Generate a migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:push` | Push schema straight to the DB (dev only) |
-| `pnpm db:reset` | Drop and recreate `DATABASE_URL`'s database (tables, triggers, functions, extensions, everything) so the next `db:push` builds it fresh. Connects via the `postgres` maintenance database, disconnects open sessions, and refuses with `NODE_ENV=production` |
+| `pnpm db:push` | Push schema straight to the DB without a migration (throwaway local prototyping only — never production) |
+| `pnpm db:reset` | Drop and recreate `DATABASE_URL`'s database (tables, triggers, functions, extensions, everything) so the next `db:migrate` builds it fresh. Connects via the `postgres` maintenance database, disconnects open sessions, and refuses with `NODE_ENV=production` |
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
 | `pnpm db:seed:demo` | Create a demo dealership with three months of dealer data from `SEED_DEMO_ADMIN_*`, signing in with `SEED_SUPER_ADMIN_PASSWORD` (dev only, skips if the demo admin exists) |
 | `pnpm db:studio` | Drizzle Studio |
@@ -84,7 +84,7 @@ src/
 │   ├── database.module.ts      # Provides DRIZZLE + PG_POOL, closes pool on shutdown
 │   ├── database.constants.ts
 │   ├── schema/                 # One file per table + barrel index
-│   ├── migrations/             # Stale initial SQL — the schema files are the source of truth
+│   ├── migrations/             # Generated SQL migrations + meta/ journal — committed, never edited by hand
 │   └── interfaces/             # Row types inferred from the schema
 └── modules/                    # Feature modules — add new domains here
     ├── auth/                   # Register, login, refresh rotation, logout, RBAC guards
@@ -215,7 +215,7 @@ The backend does no AI work itself. Gemini's tool calls run in the browser and g
 - 22 properties — sale and rent; available, sold and rented; one without an owner; one deactivated; one on a deactivated custom type; facilities on sale and rent listings, including default and custom ones,
 - 12 requirements — buy and rent; open, matched and closed; one with any type; open ones with several matches and one with none.
 
-It refuses to run with `NODE_ENV=production` and skips if the demo admin already exists — run `pnpm db:reset` and `pnpm db:push` first to reseed. The dataset lives in [demo-dataset.ts](src/database/seeds/demo/demo-dataset.ts), and its spec checks that references, dates and listing rules stay consistent when you edit it.
+It refuses to run with `NODE_ENV=production` and skips if the demo admin already exists — run `pnpm db:reset` and `pnpm db:migrate` first to reseed. The dataset lives in [demo-dataset.ts](src/database/seeds/demo/demo-dataset.ts), and its spec checks that references, dates and listing rules stay consistent when you edit it.
 
 Refresh tokens are rotated on every use: the presented token is revoked and a new pair is issued in one transaction, and if two requests race with the same token only one wins. Each token is stored as a SHA-256 hash (it is a long random JWT, so the slow argon2 used for passwords adds nothing) and keyed by its `jti`; the client IP is stored as `inet`. Presenting an already-revoked token is treated as a replay and revokes every session for that user.
 
@@ -223,7 +223,10 @@ Refresh tokens are rotated on every use: the presented token is revoked and a ne
 
 1. Edit or add a table under `src/database/schema/`.
 2. Export it from `src/database/schema/index.ts`.
-3. `pnpm db:push` to apply the schema, then `pnpm db:seed` for seed data. No migration files are committed for schema changes; the schema files are the source of truth.
+3. `pnpm db:generate --name <what_changed>` to write the next migration under `src/database/migrations/`. Read the SQL, then commit it with the schema change.
+4. `pnpm db:migrate` to apply pending migrations (same command locally and in production), then `pnpm db:seed` for seed data.
+
+Never edit or delete a committed migration, and never `db:push` to production: a pushed change that is later migrated fails with "already exists". `0000_init` is the baseline; production and existing local databases were built with `db:push` and had it recorded as applied in `drizzle.__drizzle_migrations` without running its SQL.
 
 Tables: `companies` (tenants) → `users` (nullable `company_id`, since `super_admin` is platform-level) → `refresh_tokens`. Dealer tables, each with a `company_id`: `property_types` and `facilities`, `contacts`, `cities` → `areas` (→ city), `properties` (→ type, owner contact, city, optional area, `created_by` user) and `property_requirements` (→ contact, optional type, optional preferred city; `preferred_area_ids` is a `uuid[]` of areas).
 

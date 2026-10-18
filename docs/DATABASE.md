@@ -1,8 +1,8 @@
 # RMS Database: Structure, ERD and Data Flows
 
-PostgreSQL, accessed through **Drizzle ORM** (`pg` driver). The schema files in [`src/database/schema/`](../src/database/schema/) are the source of truth. Changes are applied with `pnpm db:push`, and no migrations are committed.
+PostgreSQL, accessed through **Drizzle ORM** (`pg` driver). The schema files in [`src/database/schema/`](../src/database/schema/) are the source of truth. Changes are written as migrations with `pnpm db:generate` and applied with `pnpm db:migrate`; the generated SQL in `src/database/migrations/` is committed.
 
-> `src/database/migrations/0000_init.sql` is **stale**. It describes an early version with only `companies`, `users` and `refresh_tokens`, and older columns such as `slug`, `username` and `deleted_at`. Do not read the current schema from it.
+> `0000_init.sql` is the baseline. Production and existing local databases were created with `db:push`, so `0000_init` was recorded in `drizzle.__drizzle_migrations` as applied without running its SQL.
 
 ## Contents
 
@@ -669,10 +669,12 @@ stateDiagram-v2
 
 | Command | Entry point | Effect on the database |
 |---|---|---|
-| `pnpm db:push` | drizzle-kit | Applies the schema files to the database |
+| `pnpm db:generate` | drizzle-kit | None. Writes the next migration SQL from schema changes |
+| `pnpm db:migrate` | drizzle-kit | Applies pending migrations and records them in `drizzle.__drizzle_migrations` |
+| `pnpm db:push` | drizzle-kit | Applies the schema files directly, without a migration. Throwaway local prototyping only |
 | `pnpm db:seed` | `src/database/seeds/run-seed.ts` | Idempotent. Creates the `super_admin` user. |
 | `pnpm db:seed:demo` | `src/database/seeds/run-demo-seed.ts` | Blocked in production. Runs **one transaction** that inserts companies → users → property_types → contacts → facilities → cities/areas → properties → property_requirements, with timestamps backdated over several months. |
-| `pnpm db:reset` | `scripts/reset-db.ts` | Blocked in production. Connects to the `postgres` maintenance database, runs `DROP DATABASE ... WITH (FORCE)` then `CREATE DATABASE`; run `db:push` and `db:seed` afterwards. |
+| `pnpm db:reset` | `scripts/reset-db.ts` | Blocked in production. Connects to the `postgres` maintenance database, runs `DROP DATABASE ... WITH (FORCE)` then `CREATE DATABASE`; run `db:migrate` and `db:seed` afterwards. |
 
 There are no cron jobs or queues.
 
@@ -682,6 +684,5 @@ There are no cron jobs or queues.
 
 1. **No referential integrity on `uuid[]` columns.** `facilities` and `preferred_area_ids` are checked only on write, so deactivated or orphaned ids can remain in them. Composite FKs cannot cover array elements.
 2. **Expired refresh tokens are never purged.** `RefreshTokensRepository.deleteExpired()` exists, but nothing calls it.
-3. **The migration file is stale.** `0000_init.sql` does not reflect the current schema, and production still relies on `db:push`.
-4. **Constraint error mapping is incomplete.** `COMPANY_CONSTRAINT_MESSAGES` maps only `users_company_id_companies_id_fk`.
-5. **Search cannot use an index.** Every list search is `ILIKE '%term%'`. A `pg_trgm` index only helps when every OR'd column is indexed on the same table, and property search also matches joined city and area names, so it needs a dedicated search column before trigram indexes pay off.
+3. **Constraint error mapping is incomplete.** `COMPANY_CONSTRAINT_MESSAGES` maps only `users_company_id_companies_id_fk`.
+4. **Search cannot use an index.** Every list search is `ILIKE '%term%'`. A `pg_trgm` index only helps when every OR'd column is indexed on the same table, and property search also matches joined city and area names, so it needs a dedicated search column before trigram indexes pay off.
