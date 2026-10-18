@@ -8,7 +8,7 @@ export const setupSwagger = (
 ): void => {
   const document = new DocumentBuilder()
     .setTitle('RMS API')
-    .setDescription('Restaurant Management System backend')
+    .setDescription('Property Dealer Management System backend')
     .setVersion(config.apiVersion)
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
     .build();

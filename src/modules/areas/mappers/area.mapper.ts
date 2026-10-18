@@ -6,7 +6,7 @@ export const toAreaResponse = (row: IAreaWithCityRow): AreaResponseDto => ({
   cityId: row.cityId,
   cityName: row.cityName,
   name: row.name,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

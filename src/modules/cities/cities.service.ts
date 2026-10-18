@@ -26,7 +26,7 @@ export class CitiesService {
     const row = await this.citiesRepository.create({
       companyId,
       name,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toCityResponse(row, 0);
@@ -73,13 +73,13 @@ export class CitiesService {
       await this.assertNameIsAvailable(companyId, name, id);
     }
 
-    if (dto.status === false && current.status) {
+    if (dto.status === false && current.isActive) {
       await this.assertHasNoActiveAreas(current);
     }
 
     const row = await this.citiesRepository.update(companyId, id, {
       name,
-      status: dto.status ?? undefined,
+      isActive: dto.status ?? undefined,
       updatedAt: new Date(),
     });
 
@@ -96,7 +96,7 @@ export class CitiesService {
   async remove(companyId: string, id: string): Promise<CityResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(`City "${current.name}" is already deactivated`);
     }
 
@@ -108,7 +108,7 @@ export class CitiesService {
   async restore(companyId: string, id: string): Promise<CityResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`City "${current.name}" is already active`);
     }
 
@@ -135,7 +135,7 @@ export class CitiesService {
       );
     }
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new BadRequestException(
         `City "${row.name}" is deactivated. Reactivate it first, or pick another city.`,
       );

@@ -7,11 +7,6 @@ export class PropertyTypeResponseDto {
   @ApiProperty({ example: 'Shop' })
   name!: string;
 
-  @ApiProperty({
-    description: 'true for platform-wide types, which a dealer cannot edit',
-  })
-  isBuiltIn!: boolean;
-
   @ApiProperty({ description: 'true is active, false is deactivated' })
   status!: boolean;
 

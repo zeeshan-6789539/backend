@@ -34,9 +34,8 @@ export const users = pgTable(
     name: varchar('name', { length: 150 }).notNull(),
     phone: varchar('phone', { length: 32 }),
     role: userRoleEnum('role').notNull().default(UserRole.STAFF),
-    // Single lifecycle flag: true is active, false is deactivated. Deleting a
-    // user flips this to false — there is no separate deleted_at column.
-    status: boolean('status').notNull().default(true),
+    // Deleting a user flips this to false; there is no deleted_at column
+    isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -49,8 +48,6 @@ export const users = pgTable(
   (table) => [
     // email is the login identifier and must be unique
     uniqueIndex('users_email_unique_idx').on(table.email),
-    index('users_role_idx').on(table.role),
-    index('users_status_idx').on(table.status),
     // Serves the default "latest first" listing without a sort step
     index('users_created_at_idx').on(table.createdAt.desc(), table.id.desc()),
     // Same, filtered to one tenant
@@ -63,6 +60,8 @@ export const users = pgTable(
       'users_super_admin_has_no_company',
       sql`${table.role} <> 'super_admin' OR ${table.companyId} IS NULL`,
     ),
+    // The app lower-cases emails; this keeps the unique index case-insensitive in effect
+    check('users_email_lowercase', sql`${table.email} = lower(${table.email})`),
   ],
 );
 

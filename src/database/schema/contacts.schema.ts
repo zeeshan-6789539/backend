@@ -1,9 +1,12 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -20,12 +23,13 @@ export const contacts = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 150 }).notNull(),
-    phone: varchar('phone', { length: 32 }).notNull(),
+    // Always stored as 11 digits, e.g. 03001234567
+    phone: varchar('phone', { length: 11 }).notNull(),
     email: varchar('email', { length: 255 }),
     cnic: varchar('cnic', { length: 15 }),
     address: varchar('address', { length: 500 }),
     notes: text('notes'),
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -40,10 +44,17 @@ export const contacts = pgTable(
       table.companyId,
       table.phone,
     ),
+    // Target of the tenant-safe composite foreign keys
+    unique('contacts_company_id_id_unique').on(table.companyId, table.id),
     index('contacts_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),
       table.id.desc(),
+    ),
+    check('contacts_phone_format', sql`${table.phone} ~ '^03[0-9]{9}$'`),
+    check(
+      'contacts_cnic_format',
+      sql`${table.cnic} IS NULL OR ${table.cnic} ~ '^[0-9]{5}-?[0-9]{7}-?[0-9]$'`,
     ),
   ],
 );

@@ -1,18 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
 import { buildPaginatedResult } from '../../common/utils/pagination.util.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
 import type { IPropertyTypeRow } from '../../database/interfaces/i-property-type-row.js';
 import type { CreatePropertyTypeDto } from './dto/create-property-type.dto.js';
 import type { PropertyTypeResponseDto } from './dto/property-type-response.dto.js';
 import type { QueryPropertyTypesDto } from './dto/query-property-types.dto.js';
 import type { UpdatePropertyTypeDto } from './dto/update-property-type.dto.js';
 import { toPropertyTypeResponse } from './mappers/property-type.mapper.js';
+import { DEFAULT_PROPERTY_TYPES } from './property-types.constants.js';
 import { PropertyTypesRepository } from './property-types.repository.js';
 
 @Injectable()
@@ -30,7 +31,7 @@ export class PropertyTypesService {
     const row = await this.propertyTypesRepository.create({
       companyId,
       name,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toPropertyTypeResponse(row);
@@ -66,7 +67,7 @@ export class PropertyTypesService {
     id: string,
     dto: UpdatePropertyTypeDto,
   ): Promise<PropertyTypeResponseDto> {
-    await this.findOwnedRowOrFail(companyId, id);
+    await this.findRowOrFail(companyId, id);
 
     const name = dto.name?.trim();
 
@@ -76,7 +77,7 @@ export class PropertyTypesService {
 
     const row = await this.propertyTypesRepository.update(companyId, id, {
       name,
-      status: dto.status ?? undefined,
+      isActive: dto.status ?? undefined,
       updatedAt: new Date(),
     });
 
@@ -91,9 +92,9 @@ export class PropertyTypesService {
 
   // Deleting a property type deactivates it: status goes false, the row is kept
   async remove(companyId: string, id: string): Promise<PropertyTypeResponseDto> {
-    const current = await this.findOwnedRowOrFail(companyId, id);
+    const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `Property type "${current.name}" is already deactivated`,
       );
@@ -103,9 +104,9 @@ export class PropertyTypesService {
   }
 
   async restore(companyId: string, id: string): Promise<PropertyTypeResponseDto> {
-    const current = await this.findOwnedRowOrFail(companyId, id);
+    const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(
         `Property type "${current.name}" is already active`,
       );
@@ -134,7 +135,7 @@ export class PropertyTypesService {
       );
     }
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new BadRequestException(
         `Property type "${row.name}" is deactivated. Reactivate it first, or pick another type.`,
       );
@@ -143,35 +144,16 @@ export class PropertyTypesService {
     return row;
   }
 
-  // Idempotent: returns how many of the names were newly created
-  async seedBuiltInTypes(names: readonly string[]): Promise<number> {
-    let created = 0;
-
-    for (const name of names) {
-      const existing = await this.propertyTypesRepository.findBuiltInByName(name);
-
-      if (!existing) {
-        await this.propertyTypesRepository.create({ name, status: true });
-        created += 1;
-      }
-    }
-
-    return created;
-  }
-
-  private async findOwnedRowOrFail(
+  // Gives a new company its own editable copy of the defaults; returns how many were added
+  async seedDefaults(
     companyId: string,
-    id: string,
-  ): Promise<IPropertyTypeRow> {
-    const row = await this.findRowOrFail(companyId, id);
-
-    if (row.companyId === null) {
-      throw new ForbiddenException(
-        `"${row.name}" is a built-in property type and cannot be changed. Add your own type instead.`,
-      );
-    }
-
-    return row;
+    executor?: IDrizzleExecutor,
+  ): Promise<number> {
+    return this.propertyTypesRepository.createManyForCompany(
+      companyId,
+      DEFAULT_PROPERTY_TYPES,
+      executor,
+    );
   }
 
   private async setStatusOrFail(
@@ -202,9 +184,7 @@ export class PropertyTypesService {
 
     if (existing) {
       throw new ConflictException(
-        existing.companyId === null
-          ? `"${existing.name}" is already a built-in property type. Use it instead of adding a copy.`
-          : `You already have a property type named "${existing.name}". Use it, or pick another name.`,
+        `You already have a property type named "${existing.name}". Use it, or pick another name.`,
       );
     }
   }

@@ -9,7 +9,7 @@ export interface IDemoProperty {
   price: number;
   securityDeposit?: number;
   areaSqft?: number;
-  // Built-in or custom facility names
+  // Default or custom facility names
   facilityNames?: string[];
   floor?: string;
   city: string;

@@ -33,7 +33,7 @@ export class AreasService {
       companyId,
       cityId: city.id,
       name,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toAreaResponse({ ...row, cityName: city.name });
@@ -86,7 +86,7 @@ export class AreasService {
     const row = await this.areasRepository.update(companyId, id, {
       cityId: isMoving ? city.id : undefined,
       name,
-      status: dto.status ?? undefined,
+      isActive: dto.status ?? undefined,
       updatedAt: new Date(),
     });
 
@@ -103,7 +103,7 @@ export class AreasService {
   async remove(companyId: string, id: string): Promise<AreaResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(`Area "${current.name}" is already deactivated`);
     }
 
@@ -113,7 +113,7 @@ export class AreasService {
   async restore(companyId: string, id: string): Promise<AreaResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`Area "${current.name}" is already active`);
     }
 
@@ -157,7 +157,7 @@ export class AreasService {
     }
 
     const inactive = rows.find(
-      (row) => !row.status && !(options.keptIds ?? []).includes(row.id),
+      (row) => !row.isActive && !(options.keptIds ?? []).includes(row.id),
     );
 
     if (inactive) {

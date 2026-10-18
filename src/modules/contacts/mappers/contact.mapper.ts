@@ -9,7 +9,7 @@ export const toContactResponse = (row: IContactRow): ContactResponseDto => ({
   cnic: row.cnic,
   address: row.address,
   notes: row.notes,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

@@ -1,7 +1,7 @@
 {
-  "name": "rms-backend",
+  "name": "property-dealers-backend",
   "version": "0.0.1",
-  "description": "Restaurant Management System API",
+  "description": "Property Dealer Management System API",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -13,7 +13,6 @@
   },
   "scripts": {
     "build": "nest build",
-    "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

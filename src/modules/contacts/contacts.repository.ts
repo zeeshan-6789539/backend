@@ -108,14 +108,14 @@ export class ContactsRepository {
     id: string,
     status: boolean,
   ): Promise<IContactRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private buildFilters(options: IFindContactsOptions): SQL | undefined {
     const conditions: SQL[] = [eq(contacts.companyId, options.companyId)];
 
     if (options.status !== undefined) {
-      conditions.push(eq(contacts.status, options.status));
+      conditions.push(eq(contacts.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

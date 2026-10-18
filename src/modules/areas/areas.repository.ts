@@ -137,7 +137,7 @@ export class AreasRepository {
     id: string,
     status: boolean,
   ): Promise<IAreaRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private buildFilters(options: IFindAreasOptions): SQL | undefined {
@@ -148,7 +148,7 @@ export class AreasRepository {
     }
 
     if (options.status !== undefined) {
-      conditions.push(eq(areas.status, options.status));
+      conditions.push(eq(areas.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

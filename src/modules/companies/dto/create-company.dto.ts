@@ -48,4 +48,12 @@ export class CreateCompanyDto {
   @IsBoolean()
   @IsOptional()
   status?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: "true lets the company's client admins use the voice assistant",
+  })
+  @IsBoolean()
+  @IsOptional()
+  voiceAssistantEnabled?: boolean;
 }

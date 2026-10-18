@@ -22,6 +22,11 @@ export class CompanyResponseDto {
   @ApiProperty({ description: 'true is active, false is deactivated' })
   status!: boolean;
 
+  @ApiProperty({
+    description: "true lets the company's client admins use the voice assistant",
+  })
+  voiceAssistantEnabled!: boolean;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: Date;
 

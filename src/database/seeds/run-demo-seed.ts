@@ -5,8 +5,6 @@ import { AppModule } from '../../app.module.js';
 import { describeError } from '../../common/utils/exception.util.js';
 import { seedConfig } from '../../config/seed.config.js';
 import type { ISeedConfig } from '../../config/interfaces/i-seed-config.js';
-import { FacilitiesService } from '../../modules/facilities/facilities.service.js';
-import { PropertyTypesService } from '../../modules/property-types/property-types.service.js';
 import { DRIZZLE } from '../database.constants.js';
 import type { IDrizzleDb } from '../interfaces/i-drizzle-db.js';
 import { seedDemo } from './demo.seed.js';
@@ -25,8 +23,6 @@ const app = await NestFactory.createApplicationContext(AppModule, {
 try {
   await seedDemo(
     app.get<IDrizzleDb>(DRIZZLE),
-    app.get(PropertyTypesService),
-    app.get(FacilitiesService),
     app.get<ISeedConfig>(seedConfig.KEY),
   );
   logger.log('Demo seeding complete');

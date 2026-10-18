@@ -44,7 +44,7 @@ export class FacilitiesController {
   @Get()
   @ResponseMessage('Facilities retrieved successfully')
   @ApiOperation({
-    summary: 'List built-in and own facilities (client_admin only)',
+    summary: "List the company's facilities (client_admin only)",
     description: 'Newest first by default. Filter with status; search matches name.',
   })
   findAll(
@@ -67,8 +67,7 @@ export class FacilitiesController {
   @Patch(':id')
   @ResponseMessage('Facility updated successfully')
   @ApiOperation({
-    summary: 'Update an own facility (client_admin only)',
-    description: 'Built-in facilities cannot be changed.',
+    summary: 'Update a facility (client_admin only)',
   })
   update(
     @CurrentCompanyId() companyId: string,
@@ -93,8 +92,8 @@ export class FacilitiesController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Facility deleted successfully')
   @ApiOperation({
-    summary: 'Delete an own facility (client_admin only)',
-    description: 'Sets status to false. Built-in facilities cannot be deleted.',
+    summary: 'Delete a facility (client_admin only)',
+    description: 'Sets status to false.',
   })
   remove(
     @CurrentCompanyId() companyId: string,

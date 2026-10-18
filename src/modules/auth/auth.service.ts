@@ -6,10 +6,16 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '../../common/enums/user-role.enum.js';
-import { hashSecret, verifySecret } from '../../common/utils/hash.util.js';
+import {
+  hashToken,
+  verifySecret,
+  verifyTokenHash,
+} from '../../common/utils/hash.util.js';
+import { toIpAddressOrNull } from '../../common/utils/ip.util.js';
 import { uuidv7 } from '../../common/utils/uuid.util.js';
 import { jwtConfig } from '../../config/jwt.config.js';
 import type { IJwtConfig } from '../../config/interfaces/i-jwt-config.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
 import type { IUserRow } from '../../database/interfaces/i-user-row.js';
 import { CompaniesService } from '../companies/companies.service.js';
 import type { UserResponseDto } from '../users/dto/user-response.dto.js';
@@ -64,7 +70,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new UnauthorizedException(
         'This account has been deactivated. Contact an administrator to restore it.',
       );
@@ -108,7 +114,7 @@ export class AuthService {
       );
     }
 
-    if (!(await verifySecret(stored.tokenHash, dto.refreshToken))) {
+    if (!verifyTokenHash(stored.tokenHash, dto.refreshToken)) {
       throw new UnauthorizedException(
         'This refresh token is not recognised. Please sign in again.',
       );
@@ -116,15 +122,24 @@ export class AuthService {
 
     const row = await this.usersService.findRowOrFail(payload.sub);
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new UnauthorizedException(
         'This account has been deactivated. Contact an administrator to restore it.',
       );
     }
 
-    await this.refreshTokensRepository.revokeById(stored.id);
+    // Revoke and reissue together, so a failed insert never strands the user
+    return this.refreshTokensRepository.transaction(async (tx) => {
+      const isRevoked = await this.refreshTokensRepository.revokeById(stored.id, tx);
 
-    return this.issueTokens(row, context);
+      if (!isRevoked) {
+        throw new UnauthorizedException(
+          'This refresh token was already used. Please sign in again.',
+        );
+      }
+
+      return this.issueTokens(row, context, tx);
+    });
   }
 
   async logout(dto: RefreshTokenDto): Promise<void> {
@@ -146,6 +161,7 @@ export class AuthService {
 
     const company = await this.companiesService.findOne(user.companyId);
     user.companyName = company.name;
+    user.voiceAssistantEnabled = company.voiceAssistantEnabled;
 
     return user;
   }
@@ -168,6 +184,7 @@ export class AuthService {
   private async issueTokens(
     user: IUserRow,
     context: IRequestContext,
+    executor?: IDrizzleExecutor,
   ): Promise<IAuthTokens> {
     const jti = uuidv7();
 
@@ -196,14 +213,17 @@ export class AuthService {
 
     const decoded = this.jwtService.decode<{ exp: number }>(refreshToken);
 
-    await this.refreshTokensRepository.create({
-      id: jti,
-      userId: user.id,
-      tokenHash: await hashSecret(refreshToken),
-      expiresAt: new Date(decoded.exp * 1000),
-      userAgent: context.userAgent?.slice(0, 255),
-      ipAddress: context.ipAddress?.slice(0, 64),
-    });
+    await this.refreshTokensRepository.create(
+      {
+        id: jti,
+        userId: user.id,
+        tokenHash: hashToken(refreshToken),
+        expiresAt: new Date(decoded.exp * 1000),
+        userAgent: context.userAgent?.slice(0, 255),
+        ipAddress: toIpAddressOrNull(context.ipAddress),
+      },
+      executor,
+    );
 
     return { accessToken, refreshToken, tokenType: 'Bearer' };
   }

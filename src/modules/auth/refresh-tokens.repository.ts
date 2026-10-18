@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, lt } from 'drizzle-orm';
 import { DRIZZLE } from '../../database/database.constants.js';
 import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
+import type { IDrizzleTransaction } from '../../database/interfaces/i-drizzle-transaction.js';
 import type {
   INewRefreshTokenRow,
   IRefreshTokenRow,
@@ -12,8 +14,15 @@ import { refreshTokens } from '../../database/schema/index.js';
 export class RefreshTokensRepository {
   constructor(@Inject(DRIZZLE) private readonly db: IDrizzleDb) {}
 
-  async create(data: INewRefreshTokenRow): Promise<IRefreshTokenRow> {
-    const [row] = await this.db.insert(refreshTokens).values(data).returning();
+  async transaction<T>(work: (tx: IDrizzleTransaction) => Promise<T>): Promise<T> {
+    return this.db.transaction(work);
+  }
+
+  async create(
+    data: INewRefreshTokenRow,
+    executor: IDrizzleExecutor = this.db,
+  ): Promise<IRefreshTokenRow> {
+    const [row] = await executor.insert(refreshTokens).values(data).returning();
 
     return row;
   }
@@ -28,11 +37,18 @@ export class RefreshTokensRepository {
     return row;
   }
 
-  async revokeById(id: string): Promise<void> {
-    await this.db
+  // False when the token was already revoked, e.g. by a concurrent refresh
+  async revokeById(
+    id: string,
+    executor: IDrizzleExecutor = this.db,
+  ): Promise<boolean> {
+    const rows = await executor
       .update(refreshTokens)
       .set({ revokedAt: new Date() })
-      .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.revokedAt)));
+      .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+
+    return rows.length > 0;
   }
 
   async revokeAllForUser(userId: string): Promise<void> {

@@ -5,7 +5,7 @@ export const toCityResponse = (row: ICityRow, areaCount: number): CityResponseDt
   id: row.id,
   name: row.name,
   areaCount,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

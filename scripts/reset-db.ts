@@ -1,13 +1,13 @@
 import { config } from 'dotenv';
 import pg from 'pg';
 
-// Same precedence as ConfigModule in app.module.ts — first file wins
-config({ path: ['.env.local', '.env'], quiet: true });
+// Same file as ConfigModule in app.module.ts
+config({ path: '.env', quiet: true });
 
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error('DATABASE_URL is not set — check .env or .env.local');
+  throw new Error('DATABASE_URL is not set — check .env');
 }
 
 if (process.env.NODE_ENV === 'production') {

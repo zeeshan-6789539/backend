@@ -1,23 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { SortOrder } from '../../common/enums/sort-order.enum.js';
 import { withDatabaseErrors } from '../../common/utils/database-error.util.js';
 import { getOffset } from '../../common/utils/pagination.util.js';
 import { buildSearchCondition } from '../../common/utils/query.util.js';
 import { DRIZZLE } from '../../database/database.constants.js';
 import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
 import type {
   INewFacilityRow,
   IFacilityRow,
@@ -29,9 +18,8 @@ import { FACILITY_CONSTRAINT_MESSAGES } from './facilities.constants.js';
 
 const SEARCHABLE_COLUMNS = [facilities.name];
 
-// A dealer sees the built-in facilities plus its own
-const visibleTo = (companyId: string): SQL | undefined =>
-  or(eq(facilities.companyId, companyId), isNull(facilities.companyId));
+// A dealer only ever sees its own facilities
+const visibleTo = (companyId: string): SQL => eq(facilities.companyId, companyId);
 
 @Injectable()
 export class FacilitiesRepository {
@@ -60,7 +48,7 @@ export class FacilitiesRepository {
       .where(and(inArray(facilities.id, [...ids]), visibleTo(companyId)));
   }
 
-  // Case-insensitive, so "furnished" clashes with the built-in "Furnished"
+  // Case-insensitive, so "furnished" clashes with an existing "Furnished"
   async findVisibleByName(
     companyId: string,
     name: string,
@@ -81,19 +69,21 @@ export class FacilitiesRepository {
     return row;
   }
 
-  async findBuiltInByName(name: string): Promise<IFacilityRow | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(facilities)
-      .where(
-        and(
-          sql`lower(${facilities.name}) = ${name.toLowerCase()}`,
-          isNull(facilities.companyId),
-        ),
-      )
-      .limit(1);
+  // Names the company already has are skipped, so this is safe to repeat
+  async createManyForCompany(
+    companyId: string,
+    names: readonly string[],
+    executor: IDrizzleExecutor = this.db,
+  ): Promise<number> {
+    return withDatabaseErrors(async () => {
+      const rows = await executor
+        .insert(facilities)
+        .values(names.map((name) => ({ companyId, name })))
+        .onConflictDoNothing()
+        .returning({ id: facilities.id });
 
-    return row;
+      return rows.length;
+    }, FACILITY_CONSTRAINT_MESSAGES);
   }
 
   async findMany(
@@ -125,7 +115,7 @@ export class FacilitiesRepository {
     }, FACILITY_CONSTRAINT_MESSAGES);
   }
 
-  // Scoped to the company, so built-in rows can never be changed through here
+  // Scoped to the company, so another dealer's rows can never be changed through here
   async update(
     companyId: string,
     id: string,
@@ -149,19 +139,14 @@ export class FacilitiesRepository {
     id: string,
     status: boolean,
   ): Promise<IFacilityRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private buildFilters(options: IFindFacilitiesOptions): SQL | undefined {
-    const conditions: SQL[] = [];
-    const visible = visibleTo(options.companyId);
-
-    if (visible) {
-      conditions.push(visible);
-    }
+    const conditions: SQL[] = [visibleTo(options.companyId)];
 
     if (options.status !== undefined) {
-      conditions.push(eq(facilities.status, options.status));
+      conditions.push(eq(facilities.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

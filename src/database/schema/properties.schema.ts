@@ -3,12 +3,14 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -39,12 +41,8 @@ export const properties = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'restrict' }),
-    propertyTypeId: uuid('property_type_id')
-      .notNull()
-      .references(() => propertyTypes.id, { onDelete: 'restrict' }),
-    ownerContactId: uuid('owner_contact_id').references(() => contacts.id, {
-      onDelete: 'restrict',
-    }),
+    propertyTypeId: uuid('property_type_id').notNull(),
+    ownerContactId: uuid('owner_contact_id'),
     createdBy: uuid('created_by').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -58,17 +56,15 @@ export const properties = pgTable(
     // Facility ids, e.g. "2 bedrooms", "Furnished"
     facilities: uuid('facilities').array().notNull().default(sql`'{}'::uuid[]`),
     floor: varchar('floor', { length: 50 }),
-    cityId: uuid('city_id')
-      .notNull()
-      .references(() => cities.id, { onDelete: 'restrict' }),
-    // Optional, but when set it must be an area of cityId (service rule)
-    areaId: uuid('area_id').references(() => areas.id, { onDelete: 'restrict' }),
+    cityId: uuid('city_id').notNull(),
+    // Optional, but when set it must be an area of cityId (composite key below)
+    areaId: uuid('area_id'),
     address: varchar('address', { length: 500 }),
-    // Deal lifecycle; `status` below stays the active/deactivated flag
+    // Deal lifecycle; isActive below is the active/deactivated flag
     propertyStatus: propertyStatusEnum('property_status')
       .notNull()
       .default(PropertyStatus.AVAILABLE),
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -78,6 +74,29 @@ export const properties = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Composite keys stop a listing from pointing at another company's rows
+    foreignKey({
+      name: 'properties_company_property_type_fk',
+      columns: [table.companyId, table.propertyTypeId],
+      foreignColumns: [propertyTypes.companyId, propertyTypes.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'properties_company_owner_contact_fk',
+      columns: [table.companyId, table.ownerContactId],
+      foreignColumns: [contacts.companyId, contacts.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'properties_company_city_fk',
+      columns: [table.companyId, table.cityId],
+      foreignColumns: [cities.companyId, cities.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'properties_city_area_fk',
+      columns: [table.cityId, table.areaId],
+      foreignColumns: [areas.cityId, areas.id],
+    }).onDelete('restrict'),
+    // Target of property_requirements' tenant-safe matched property key
+    unique('properties_company_id_id_unique').on(table.companyId, table.id),
     index('properties_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),
@@ -95,6 +114,14 @@ export const properties = pgTable(
     // GIN so the "has every requested facility" match (@>) can use an index
     index('properties_facilities_idx').using('gin', table.facilities),
     check('properties_price_non_negative', sql`${table.price} >= 0`),
+    check(
+      'properties_deposit_non_negative',
+      sql`${table.securityDeposit} IS NULL OR ${table.securityDeposit} >= 0`,
+    ),
+    check(
+      'properties_area_sqft_positive',
+      sql`${table.areaSqft} IS NULL OR ${table.areaSqft} > 0`,
+    ),
     check(
       'properties_deposit_only_for_rent',
       sql`${table.purpose} = 'rent' OR ${table.securityDeposit} IS NULL`,

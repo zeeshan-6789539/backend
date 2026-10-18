@@ -21,7 +21,7 @@ export const toPropertyRequirementResponse = (
   requirementStatus: row.requirementStatus,
   matchedPropertyId: row.matchedPropertyId,
   matchedPropertyTitle: row.matchedPropertyTitle,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

@@ -10,15 +10,15 @@ yarn.lock
 dist/
 *.tsbuildinfo
 
-# Environment — .env is committed as the shared dev default.
-# Machine-specific overrides go in .env.local, which wins over .env.
-.env.local
-.env.*.local
+# Environment — .env holds secrets; only the template is committed
+.env*
+!.env.example
 
 # Logs
 logs/
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
 # Coverage
 coverage/
@@ -28,8 +28,11 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# Claude Code — shared settings.json is committed, personal overrides are not
+.claude/settings.local.json
+
 # Drizzle
 .drizzle/
 
-.vercel
-.env*
+# Vercel
+.vercel/

@@ -159,7 +159,7 @@ export class PropertyRequirementsRepository {
     id: string,
     status: boolean,
   ): Promise<IPropertyRequirementRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   // Closes the listing and links it in one transaction; false when either row was taken meanwhile
@@ -179,7 +179,7 @@ export class PropertyRequirementsRepository {
             .where(
               and(
                 this.ownedBy(args.companyId, args.requirementId),
-                eq(propertyRequirements.status, true),
+                eq(propertyRequirements.isActive, true),
                 isNull(propertyRequirements.matchedPropertyId),
               ),
             )
@@ -196,7 +196,7 @@ export class PropertyRequirementsRepository {
               and(
                 eq(properties.id, args.propertyId),
                 eq(properties.companyId, args.companyId),
-                eq(properties.status, true),
+                eq(properties.isActive, true),
                 eq(properties.propertyStatus, PropertyStatus.AVAILABLE),
               ),
             )
@@ -261,7 +261,7 @@ export class PropertyRequirementsRepository {
         ? eq(propertyRequirements.requirementStatus, options.requirementStatus)
         : undefined,
       options.status !== undefined
-        ? eq(propertyRequirements.status, options.status)
+        ? eq(propertyRequirements.isActive, options.status)
         : undefined,
       buildSearchCondition(options.search, SEARCHABLE_COLUMNS),
     ];

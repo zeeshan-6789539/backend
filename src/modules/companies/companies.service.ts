@@ -3,6 +3,8 @@ import type { IPaginatedResult } from '../../common/interfaces/i-paginated-resul
 import { buildPaginatedResult } from '../../common/utils/pagination.util.js';
 import { normalizeEmail } from '../../common/utils/string.util.js';
 import type { ICompanyRow } from '../../database/interfaces/i-company-row.js';
+import { FacilitiesService } from '../facilities/facilities.service.js';
+import { PropertyTypesService } from '../property-types/property-types.service.js';
 import { UsersService } from '../users/users.service.js';
 import { CompaniesRepository } from './companies.repository.js';
 import type { CompanyResponseDto } from './dto/company-response.dto.js';
@@ -16,16 +18,30 @@ export class CompaniesService {
   constructor(
     private readonly companiesRepository: CompaniesRepository,
     private readonly usersService: UsersService,
+    private readonly propertyTypesService: PropertyTypesService,
+    private readonly facilitiesService: FacilitiesService,
   ) {}
 
   async create(dto: CreateCompanyDto): Promise<CompanyResponseDto> {
-    const row = await this.companiesRepository.create({
-      name: dto.name.trim(),
-      email: dto.email ? normalizeEmail(dto.email) : undefined,
-      phone: dto.phone,
-      address: dto.address,
-      city: dto.city,
-      status: dto.status,
+    // One transaction, so a company never exists without its starter catalogue
+    const row = await this.companiesRepository.transaction(async (tx) => {
+      const company = await this.companiesRepository.create(
+        {
+          name: dto.name.trim(),
+          email: dto.email ? normalizeEmail(dto.email) : undefined,
+          phone: dto.phone,
+          address: dto.address,
+          city: dto.city,
+          isActive: dto.status,
+          voiceAssistantEnabled: dto.voiceAssistantEnabled,
+        },
+        tx,
+      );
+
+      await this.propertyTypesService.seedDefaults(company.id, tx);
+      await this.facilitiesService.seedDefaults(company.id, tx);
+
+      return company;
     });
 
     return toCompanyResponse(row);
@@ -65,7 +81,8 @@ export class CompaniesService {
       phone: dto.phone,
       address: dto.address,
       city: dto.city,
-      status: dto.status,
+      isActive: dto.status,
+      voiceAssistantEnabled: dto.voiceAssistantEnabled,
       updatedAt: new Date(),
     });
 
@@ -82,7 +99,7 @@ export class CompaniesService {
   async remove(id: string): Promise<CompanyResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `Company "${current.name}" is already deactivated`,
       );
@@ -102,7 +119,7 @@ export class CompaniesService {
   async restore(id: string): Promise<CompanyResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(
         `Company "${current.name}" is already active`,
       );

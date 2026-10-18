@@ -1,22 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  isNull,
-  ne,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { SortOrder } from '../../common/enums/sort-order.enum.js';
 import { withDatabaseErrors } from '../../common/utils/database-error.util.js';
 import { getOffset } from '../../common/utils/pagination.util.js';
 import { buildSearchCondition } from '../../common/utils/query.util.js';
 import { DRIZZLE } from '../../database/database.constants.js';
 import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
 import type {
   INewPropertyTypeRow,
   IPropertyTypeRow,
@@ -28,9 +18,8 @@ import { PROPERTY_TYPE_CONSTRAINT_MESSAGES } from './property-types.constants.js
 
 const SEARCHABLE_COLUMNS = [propertyTypes.name];
 
-// A dealer sees the built-in types plus its own
-const visibleTo = (companyId: string): SQL | undefined =>
-  or(eq(propertyTypes.companyId, companyId), isNull(propertyTypes.companyId));
+// A dealer only ever sees its own types
+const visibleTo = (companyId: string): SQL => eq(propertyTypes.companyId, companyId);
 
 @Injectable()
 export class PropertyTypesRepository {
@@ -49,7 +38,7 @@ export class PropertyTypesRepository {
     return row;
   }
 
-  // Case-insensitive, so "shop" clashes with the built-in "Shop"
+  // Case-insensitive, so "shop" clashes with an existing "Shop"
   async findVisibleByName(
     companyId: string,
     name: string,
@@ -70,19 +59,21 @@ export class PropertyTypesRepository {
     return row;
   }
 
-  async findBuiltInByName(name: string): Promise<IPropertyTypeRow | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(propertyTypes)
-      .where(
-        and(
-          sql`lower(${propertyTypes.name}) = ${name.toLowerCase()}`,
-          isNull(propertyTypes.companyId),
-        ),
-      )
-      .limit(1);
+  // Names the company already has are skipped, so this is safe to repeat
+  async createManyForCompany(
+    companyId: string,
+    names: readonly string[],
+    executor: IDrizzleExecutor = this.db,
+  ): Promise<number> {
+    return withDatabaseErrors(async () => {
+      const rows = await executor
+        .insert(propertyTypes)
+        .values(names.map((name) => ({ companyId, name })))
+        .onConflictDoNothing()
+        .returning({ id: propertyTypes.id });
 
-    return row;
+      return rows.length;
+    }, PROPERTY_TYPE_CONSTRAINT_MESSAGES);
   }
 
   async findMany(
@@ -114,7 +105,7 @@ export class PropertyTypesRepository {
     }, PROPERTY_TYPE_CONSTRAINT_MESSAGES);
   }
 
-  // Scoped to the company, so built-in rows can never be changed through here
+  // Scoped to the company, so another dealer's rows can never be changed through here
   async update(
     companyId: string,
     id: string,
@@ -138,19 +129,14 @@ export class PropertyTypesRepository {
     id: string,
     status: boolean,
   ): Promise<IPropertyTypeRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private buildFilters(options: IFindPropertyTypesOptions): SQL | undefined {
-    const conditions: SQL[] = [];
-    const visible = visibleTo(options.companyId);
-
-    if (visible) {
-      conditions.push(visible);
-    }
+    const conditions: SQL[] = [visibleTo(options.companyId)];
 
     if (options.status !== undefined) {
-      conditions.push(eq(propertyTypes.status, options.status));
+      conditions.push(eq(propertyTypes.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

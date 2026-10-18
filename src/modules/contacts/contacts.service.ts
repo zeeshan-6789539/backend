@@ -33,7 +33,7 @@ export class ContactsService {
       cnic: dto.cnic ?? null,
       address: dto.address ?? null,
       notes: dto.notes ?? null,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toContactResponse(row);
@@ -83,7 +83,7 @@ export class ContactsService {
       cnic: dto.cnic,
       address: dto.address,
       notes: dto.notes,
-      status: dto.status ?? undefined,
+      isActive: dto.status ?? undefined,
       updatedAt: new Date(),
     });
 
@@ -100,7 +100,7 @@ export class ContactsService {
   async remove(companyId: string, id: string): Promise<ContactResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(`Contact "${current.name}" is already deactivated`);
     }
 
@@ -110,7 +110,7 @@ export class ContactsService {
   async restore(companyId: string, id: string): Promise<ContactResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`Contact "${current.name}" is already active`);
     }
 
@@ -137,7 +137,7 @@ export class ContactsService {
       );
     }
 
-    if (!row.status) {
+    if (!row.isActive) {
       throw new BadRequestException(
         `Contact "${row.name}" is deactivated. Reactivate them first, or pick another contact.`,
       );

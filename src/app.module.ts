@@ -35,7 +35,7 @@ import { UsersModule } from './modules/users/users.module.js';
       cache: true,
       validate: validateEnv,
       load: [appConfig, databaseConfig, jwtConfig, mailConfig, seedConfig, aiConfig],
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: '.env',
     }),
     DatabaseModule,
     AuthModule,

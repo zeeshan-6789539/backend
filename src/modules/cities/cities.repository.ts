@@ -72,7 +72,7 @@ export class CitiesRepository {
     const rows = await this.db
       .select({ cityId: areas.cityId, value: count() })
       .from(areas)
-      .where(and(inArray(areas.cityId, cityIds), eq(areas.status, true)))
+      .where(and(inArray(areas.cityId, cityIds), eq(areas.isActive, true)))
       .groupBy(areas.cityId);
 
     return new Map(rows.map((row) => [row.cityId, row.value]));
@@ -108,14 +108,14 @@ export class CitiesRepository {
     id: string,
     status: boolean,
   ): Promise<ICityRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private buildFilters(options: IFindCitiesOptions): SQL | undefined {
     const conditions: SQL[] = [eq(cities.companyId, options.companyId)];
 
     if (options.status !== undefined) {
-      conditions.push(eq(cities.status, options.status));
+      conditions.push(eq(cities.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, [cities.name]);

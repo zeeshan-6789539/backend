@@ -1,7 +1,8 @@
-import { isNull } from 'drizzle-orm';
 import { UserRole } from '../../../common/enums/user-role.enum.js';
 import { daysAgo } from '../../../common/utils/date.util.js';
 import { uuidv7 } from '../../../common/utils/uuid.util.js';
+import { DEFAULT_FACILITIES } from '../../../modules/facilities/facilities.constants.js';
+import { DEFAULT_PROPERTY_TYPES } from '../../../modules/property-types/property-types.constants.js';
 import type { IDrizzleTransaction } from '../../interfaces/i-drizzle-transaction.js';
 import {
   areas,
@@ -55,6 +56,7 @@ export const insertDemoCompany = async (
     phone: dataset.companyPhone,
     city: dataset.companyCity,
     address: dataset.companyAddress,
+    voiceAssistantEnabled: true,
     createdAt,
     updatedAt: createdAt,
   });
@@ -85,21 +87,26 @@ export const insertDemoAdmin = async (
   return id;
 };
 
-// Built-ins plus the dealer's own rows, as name -> id; shared by property types and facilities
+// The company's copy of the defaults plus its custom rows, as name -> id; shared by property types and facilities
 const insertDemoLookups = async (
   tx: IDrizzleTransaction,
   table: typeof propertyTypes | typeof facilities,
   companyId: string,
+  createdDaysAgo: number,
+  defaultNames: readonly string[],
   customRows: readonly (IDemoPropertyType | IDemoFacility)[],
 ): Promise<Map<string, string>> => {
-  const builtIns = await tx
-    .select({ id: table.id, name: table.name })
-    .from(table)
-    .where(isNull(table.companyId));
+  const ids = new Map<string, string>();
+  const createdAt = daysAgo(createdDaysAgo, 9);
 
-  const ids = new Map(builtIns.map((row) => [row.name, row.id]));
+  const defaultRows = defaultNames.map((name) => {
+    const id = uuidv7();
+    ids.set(name, id);
 
-  const rows = customRows.map((row, index) => {
+    return { id, companyId, name, createdAt, updatedAt: createdAt };
+  });
+
+  const customRowValues = customRows.map((row, index) => {
     const id = uuidv7();
     ids.set(row.name, id);
 
@@ -107,15 +114,13 @@ const insertDemoLookups = async (
       id,
       companyId,
       name: row.name,
-      status: row.deactivatedDaysAgo === undefined,
+      isActive: row.deactivatedDaysAgo === undefined,
       createdAt: daysAgo(row.createdDaysAgo, hourFor(index)),
       updatedAt: daysAgo(row.deactivatedDaysAgo ?? row.createdDaysAgo, hourFor(index)),
     };
   });
 
-  if (rows.length > 0) {
-    await tx.insert(table).values(rows);
-  }
+  await tx.insert(table).values([...defaultRows, ...customRowValues]);
 
   return ids;
 };
@@ -123,15 +128,30 @@ const insertDemoLookups = async (
 export const insertDemoPropertyTypes = (
   tx: IDrizzleTransaction,
   companyId: string,
-  customTypes: readonly IDemoPropertyType[],
-): Promise<Map<string, string>> => insertDemoLookups(tx, propertyTypes, companyId, customTypes);
+  dataset: IDemoDataset,
+): Promise<Map<string, string>> =>
+  insertDemoLookups(
+    tx,
+    propertyTypes,
+    companyId,
+    dataset.createdDaysAgo,
+    DEFAULT_PROPERTY_TYPES,
+    dataset.propertyTypes,
+  );
 
 export const insertDemoFacilities = (
   tx: IDrizzleTransaction,
   companyId: string,
-  customFacilities: readonly IDemoFacility[],
+  dataset: IDemoDataset,
 ): Promise<Map<string, string>> =>
-  insertDemoLookups(tx, facilities, companyId, customFacilities);
+  insertDemoLookups(
+    tx,
+    facilities,
+    companyId,
+    dataset.createdDaysAgo,
+    DEFAULT_FACILITIES,
+    dataset.facilities,
+  );
 
 const requireIds = (
   ids: ReadonlyMap<string, string>,
@@ -159,7 +179,7 @@ export const insertDemoContacts = async (
       cnic: contact.cnic ?? null,
       address: contact.address ?? null,
       notes: contact.notes ?? null,
-      status: contact.deactivatedDaysAgo === undefined,
+      isActive: contact.deactivatedDaysAgo === undefined,
       createdAt: daysAgo(contact.createdDaysAgo, hourFor(index)),
       updatedAt: daysAgo(
         contact.deactivatedDaysAgo ?? contact.createdDaysAgo,
@@ -185,7 +205,7 @@ export const insertDemoCities = async (
     id: uuidv7(),
     companyId,
     name: city.name,
-    status: city.deactivatedDaysAgo === undefined,
+    isActive: city.deactivatedDaysAgo === undefined,
     createdAt: daysAgo(city.createdDaysAgo, hourFor(index)),
     updatedAt: daysAgo(city.deactivatedDaysAgo ?? city.createdDaysAgo, hourFor(index)),
   }));
@@ -196,7 +216,7 @@ export const insertDemoCities = async (
       companyId,
       cityId: cityRows[cityIndex].id,
       name: area.name,
-      status: area.deactivatedDaysAgo === undefined,
+      isActive: area.deactivatedDaysAgo === undefined,
       createdAt: daysAgo(area.createdDaysAgo, hourFor(index)),
       updatedAt: daysAgo(area.deactivatedDaysAgo ?? area.createdDaysAgo, hourFor(index)),
     })),
@@ -258,7 +278,7 @@ export const insertDemoProperties = async (
       : null,
     address: property.address ?? null,
     propertyStatus: property.propertyStatus,
-    status: !property.isDeactivated,
+    isActive: !property.isDeactivated,
     createdAt: daysAgo(property.createdDaysAgo, hourFor(index)),
     updatedAt: daysAgo(
       property.updatedDaysAgo ?? property.createdDaysAgo,
@@ -297,7 +317,7 @@ export const insertDemoRequirements = async (
     facilities: requireIds(context.facilityIds, requirement.facilityNames, 'facility'),
     notes: requirement.notes ?? null,
     requirementStatus: requirement.requirementStatus,
-    status: !requirement.isDeactivated,
+    isActive: !requirement.isDeactivated,
     createdAt: daysAgo(requirement.createdDaysAgo, hourFor(index)),
     updatedAt: daysAgo(
       requirement.updatedDaysAgo ?? requirement.createdDaysAgo,

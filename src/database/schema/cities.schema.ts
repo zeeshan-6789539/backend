@@ -4,6 +4,7 @@ import {
   index,
   pgTable,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -20,7 +21,7 @@ export const cities = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 100 }).notNull(),
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -35,6 +36,8 @@ export const cities = pgTable(
       table.companyId,
       sql`lower(${table.name})`,
     ),
+    // Target of the tenant-safe composite foreign keys
+    unique('cities_company_id_id_unique').on(table.companyId, table.id),
     index('cities_company_created_at_idx').on(
       table.companyId,
       table.createdAt.desc(),

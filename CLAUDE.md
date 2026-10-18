@@ -76,7 +76,8 @@ Controller checklist:
 - **ESM.** Every relative import ends in `.js`, including from `.ts` files. TypeScript is `nodenext`.
 - **pnpm only.** Never run `npm install` — it writes a `package-lock.json` that conflicts with `pnpm-lock.yaml`.
 - **Schema changes: no migration files.** Edit the Drizzle schema directly; the user runs `db:push` and `db:seed` themselves.
-- **`status`, not `deleted_at`.** One boolean per row — `true` active, `false` deactivated. `DELETE` flips it to false, `PATCH /:id/restore` flips it back. Rows are never physically removed. Reads do *not* filter on `status`, so an admin can still see and restore a deactivated row; auth paths reject `status: false` explicitly.
+- **`is_active`, not `deleted_at`.** One boolean per row (`isActive` in Drizzle, still `status` in the API DTOs) — `true` active, `false` deactivated. `DELETE` flips it to false, `PATCH /:id/restore` flips it back. Rows are never physically removed. Reads do *not* filter on it, so an admin can still see and restore a deactivated row; auth paths reject deactivated users explicitly.
+- **Tenant references are composite FKs.** A dealer table points at another as `(company_id, x_id) → x(company_id, id)`; give a new parent table `unique(company_id, id)` and follow the same pattern.
 - **UUIDv7 ids.** Validate with `@IsUUID()` (any version) — `@IsUUID('4')` rejects every id this app issues.
 - **UTC everywhere.** Columns are `timestamptz`, the PG session and the Node process are both pinned to UTC.
 - **Reusable helpers go in `common/utils/`**, written generically. Never inline a second copy at a call site.

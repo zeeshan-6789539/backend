@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 
 // OWASP argon2id baseline: 19 MiB memory, 2 iterations, 1 lane
@@ -19,4 +20,15 @@ export const verifySecret = async (
   } catch {
     return false;
   }
+};
+
+// For long random tokens only; passwords need the slow argon2 hash above
+export const hashToken = (token: string): string =>
+  createHash('sha256').update(token).digest('hex');
+
+export const verifyTokenHash = (digest: string, token: string): boolean => {
+  const expected = Buffer.from(digest, 'hex');
+  const actual = createHash('sha256').update(token).digest();
+
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 };

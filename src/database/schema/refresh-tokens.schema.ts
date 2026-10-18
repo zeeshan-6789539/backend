@@ -1,5 +1,5 @@
-import { relations } from 'drizzle-orm';
-import { index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
+import { index, inet, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { uuidv7 } from '../../common/utils/uuid.util.js';
 import { users } from './users.schema.js';
 
@@ -11,9 +11,10 @@ export const refreshTokens = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    tokenHash: varchar('token_hash', { length: 255 }).notNull(),
+    // Hex SHA-256 of the refresh JWT
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
     userAgent: varchar('user_agent', { length: 255 }),
-    ipAddress: varchar('ip_address', { length: 64 }),
+    ipAddress: inet('ip_address'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -21,7 +22,10 @@ export const refreshTokens = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('refresh_tokens_user_id_idx').on(table.userId),
+    // Only live sessions are looked up by user (logout-all, replay revocation)
+    index('refresh_tokens_active_user_id_idx')
+      .on(table.userId)
+      .where(sql`${table.revokedAt} IS NULL`),
     index('refresh_tokens_expires_at_idx').on(table.expiresAt),
   ],
 );

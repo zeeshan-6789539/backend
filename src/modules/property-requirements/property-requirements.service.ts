@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PropertyStatus } from '../../common/enums/property-status.enum.js';
+import { RequirementStatus } from '../../common/enums/requirement-status.enum.js';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
 import { buildPaginatedResult } from '../../common/utils/pagination.util.js';
 import type { IPropertyRequirementRow } from '../../database/interfaces/i-property-requirement-row.js';
@@ -45,6 +46,7 @@ export class PropertyRequirementsService {
     companyId: string,
     dto: CreatePropertyRequirementDto,
   ): Promise<PropertyRequirementResponseDto> {
+    this.assertMatchedHasProperty(dto.requirementStatus, null);
     await this.contactsService.assertUsable(companyId, dto.contactId);
 
     if (dto.propertyTypeId) {
@@ -78,7 +80,7 @@ export class PropertyRequirementsService {
       facilities: facilityIds,
       notes: dto.notes ?? null,
       requirementStatus: dto.requirementStatus,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return this.findOne(companyId, row.id);
@@ -163,7 +165,7 @@ export class PropertyRequirementsService {
   ): Promise<PropertyRequirementResponseDto> {
     const requirement = await this.findRowOrFail(companyId, id);
 
-    if (!requirement.status) {
+    if (!requirement.isActive) {
       throw new ConflictException(
         'This requirement is deactivated. Reactivate it first, then choose a property.',
       );
@@ -187,7 +189,7 @@ export class PropertyRequirementsService {
       );
     }
 
-    if (!property.status) {
+    if (!property.isActive) {
       throw new ConflictException(
         `Property "${property.title}" is deactivated. Reactivate it first, or pick another.`,
       );
@@ -221,6 +223,8 @@ export class PropertyRequirementsService {
     dto: UpdatePropertyRequirementDto,
   ): Promise<PropertyRequirementResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
+
+    this.assertMatchedHasProperty(dto.requirementStatus, current.matchedPropertyId);
 
     if (dto.contactId && dto.contactId !== current.contactId) {
       await this.contactsService.assertUsable(companyId, dto.contactId);
@@ -272,7 +276,7 @@ export class PropertyRequirementsService {
       facilities: dto.facilityIds,
       notes: dto.notes,
       requirementStatus: dto.requirementStatus ?? undefined,
-      status: dto.status ?? undefined,
+      isActive: dto.status ?? undefined,
       updatedAt: new Date(),
     });
 
@@ -292,7 +296,7 @@ export class PropertyRequirementsService {
   ): Promise<PropertyRequirementResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException('This requirement is already deactivated');
     }
 
@@ -305,7 +309,7 @@ export class PropertyRequirementsService {
   ): Promise<PropertyRequirementResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException('This requirement is already active');
     }
 
@@ -350,6 +354,18 @@ export class PropertyRequirementsService {
     if (budgetMin != null && budgetMax != null && budgetMin > budgetMax) {
       throw new BadRequestException(
         `budgetMin (${budgetMin}) cannot be greater than budgetMax (${budgetMax}). Swap them, or clear one.`,
+      );
+    }
+  }
+
+  // Mirrors the property_requirements_matched_has_property check constraint
+  private assertMatchedHasProperty(
+    requirementStatus: RequirementStatus | null | undefined,
+    matchedPropertyId: string | null,
+  ): void {
+    if (requirementStatus === RequirementStatus.MATCHED && !matchedPropertyId) {
+      throw new BadRequestException(
+        'A requirement becomes matched only by choosing a property. Use "Choose property" from its matches instead.',
       );
     }
   }

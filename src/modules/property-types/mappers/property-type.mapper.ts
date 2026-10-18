@@ -6,8 +6,7 @@ export const toPropertyTypeResponse = (
 ): PropertyTypeResponseDto => ({
   id: row.id,
   name: row.name,
-  isBuiltIn: row.companyId === null,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

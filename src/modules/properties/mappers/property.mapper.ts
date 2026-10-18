@@ -23,7 +23,7 @@ export const toPropertyResponse = (row: IPropertyDetailRow): PropertyResponseDto
   areaName: row.areaName,
   address: row.address,
   propertyStatus: row.propertyStatus,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

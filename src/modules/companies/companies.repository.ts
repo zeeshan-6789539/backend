@@ -10,6 +10,8 @@ import type {
   INewCompanyRow,
 } from '../../database/interfaces/i-company-row.js';
 import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
+import type { IDrizzleExecutor } from '../../database/interfaces/i-drizzle-executor.js';
+import type { IDrizzleTransaction } from '../../database/interfaces/i-drizzle-transaction.js';
 import { companies } from '../../database/schema/index.js';
 import { COMPANY_CONSTRAINT_MESSAGES } from './companies.constants.js';
 import type { ICompanyListResult } from './interfaces/i-company-list-result.js';
@@ -50,9 +52,16 @@ export class CompaniesRepository {
     return { items, totalItems: total?.value ?? 0 };
   }
 
-  async create(data: INewCompanyRow): Promise<ICompanyRow> {
+  async transaction<T>(work: (tx: IDrizzleTransaction) => Promise<T>): Promise<T> {
+    return this.db.transaction(work);
+  }
+
+  async create(
+    data: INewCompanyRow,
+    executor: IDrizzleExecutor = this.db,
+  ): Promise<ICompanyRow> {
     return withDatabaseErrors(async () => {
-      const [row] = await this.db.insert(companies).values(data).returning();
+      const [row] = await executor.insert(companies).values(data).returning();
 
       return row;
     }, COMPANY_CONSTRAINT_MESSAGES);
@@ -81,7 +90,7 @@ export class CompaniesRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(companies)
-        .set({ status })
+        .set({ isActive: status })
         .where(eq(companies.id, id))
         .returning();
 
@@ -97,7 +106,7 @@ export class CompaniesRepository {
     }
 
     if (options.status !== undefined) {
-      conditions.push(eq(companies.status, options.status));
+      conditions.push(eq(companies.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

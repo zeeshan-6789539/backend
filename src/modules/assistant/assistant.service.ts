@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -8,6 +9,7 @@ import {
 import { GoogleGenAI } from '@google/genai';
 import { aiConfig } from '../../config/ai.config.js';
 import type { IAiConfig } from '../../config/interfaces/i-ai-config.js';
+import { CompaniesService } from '../companies/companies.service.js';
 import {
   ASSISTANT_MESSAGES,
   ASSISTANT_NEW_SESSION_WINDOW_MS,
@@ -20,10 +22,22 @@ export class AssistantService {
   private readonly logger = new Logger(AssistantService.name);
   private client: GoogleGenAI | undefined;
 
-  constructor(@Inject(aiConfig.KEY) private readonly config: IAiConfig) {}
+  constructor(
+    @Inject(aiConfig.KEY) private readonly config: IAiConfig,
+    private readonly companiesService: CompaniesService,
+  ) {}
 
   // The API key never leaves the server; the browser only gets a short-lived single-use token
-  async createSession(now = new Date()): Promise<AssistantSessionResponseDto> {
+  async createSession(
+    companyId: string,
+    now = new Date(),
+  ): Promise<AssistantSessionResponseDto> {
+    const company = await this.companiesService.findRowOrFail(companyId);
+
+    if (!company.voiceAssistantEnabled) {
+      throw new ForbiddenException(ASSISTANT_MESSAGES.disabledForCompany);
+    }
+
     const expiresAt = new Date(
       now.getTime() + this.config.sessionTtlMinutes * 60_000,
     ).toISOString();

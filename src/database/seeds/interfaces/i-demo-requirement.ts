@@ -10,7 +10,7 @@ export interface IDemoRequirement {
   preferredCity?: string;
   // Area names inside preferredCity
   preferredAreaNames?: string[];
-  // Built-in or custom facility names
+  // Default or custom facility names
   facilityNames?: string[];
   notes?: string;
   requirementStatus: RequirementStatus;

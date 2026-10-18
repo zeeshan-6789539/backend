@@ -1,5 +1,6 @@
 import { Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator.js';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator.js';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -10,7 +11,7 @@ import { AssistantSessionResponseDto } from './dto/assistant-session-response.dt
 
 @ApiTags('Assistant')
 @ApiBearerAuth()
-@Roles(UserRole.SUPER_ADMIN, UserRole.CLIENT_ADMIN)
+@Roles(UserRole.CLIENT_ADMIN)
 @Controller({ path: 'assistant', version: '1' })
 export class AssistantController {
   constructor(private readonly assistantService: AssistantService) {}
@@ -24,7 +25,9 @@ export class AssistantController {
     description:
       'The browser connects to Gemini Live directly with this token; every action it takes still goes through this API with the caller\'s own JWT.',
   })
-  createSession(): Promise<AssistantSessionResponseDto> {
-    return this.assistantService.createSession();
+  createSession(
+    @CurrentCompanyId() companyId: string,
+  ): Promise<AssistantSessionResponseDto> {
+    return this.assistantService.createSession(companyId);
   }
 }

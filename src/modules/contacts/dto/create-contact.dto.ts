@@ -3,12 +3,12 @@ import {
   IsBoolean,
   IsEmail,
   IsOptional,
-  IsPhoneNumber,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { CONTACT_PHONE_PATTERN } from '../contacts.constants.js';
 
 export class CreateContactDto {
   @ApiProperty({ example: 'Ahmed Raza' })
@@ -17,9 +17,9 @@ export class CreateContactDto {
   @MaxLength(150, { message: 'name must be at most 150 characters' })
   name!: string;
 
-  @ApiProperty({ example: '03296789539' })
-  @IsPhoneNumber('PK', {
-    message: 'phone must be a valid Pakistani number, e.g. 03296789539',
+  @ApiProperty({ example: '03296789539', pattern: CONTACT_PHONE_PATTERN.source })
+  @Matches(CONTACT_PHONE_PATTERN, {
+    message: 'phone must be 11 digits starting with 03, e.g. 03296789539 (no spaces, dashes or +92)',
   })
   phone!: string;
 

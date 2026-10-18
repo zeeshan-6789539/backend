@@ -139,7 +139,7 @@ export class PropertiesRepository {
     id: string,
     status: boolean,
   ): Promise<IPropertyRow | undefined> {
-    return this.update(companyId, id, { status });
+    return this.update(companyId, id, { isActive: status });
   }
 
   private selectDetails() {
@@ -167,7 +167,7 @@ export class PropertiesRepository {
         ? eq(properties.ownerContactId, options.ownerContactId)
         : undefined,
       options.status !== undefined
-        ? eq(properties.status, options.status)
+        ? eq(properties.isActive, options.status)
         : undefined,
       options.minPrice !== undefined
         ? gte(properties.price, options.minPrice)

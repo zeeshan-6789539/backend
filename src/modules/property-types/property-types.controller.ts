@@ -44,7 +44,7 @@ export class PropertyTypesController {
   @Get()
   @ResponseMessage('Property types retrieved successfully')
   @ApiOperation({
-    summary: 'List built-in and own property types (client_admin only)',
+    summary: "List the company's property types (client_admin only)",
     description: 'Newest first by default. Filter with status; search matches name.',
   })
   findAll(
@@ -67,8 +67,7 @@ export class PropertyTypesController {
   @Patch(':id')
   @ResponseMessage('Property type updated successfully')
   @ApiOperation({
-    summary: 'Update an own property type (client_admin only)',
-    description: 'Built-in types cannot be changed.',
+    summary: 'Update a property type (client_admin only)',
   })
   update(
     @CurrentCompanyId() companyId: string,
@@ -93,8 +92,8 @@ export class PropertyTypesController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Property type deleted successfully')
   @ApiOperation({
-    summary: 'Delete an own property type (client_admin only)',
-    description: 'Sets status to false. Built-in types cannot be deleted.',
+    summary: 'Delete a property type (client_admin only)',
+    description: 'Sets status to false.',
   })
   remove(
     @CurrentCompanyId() companyId: string,

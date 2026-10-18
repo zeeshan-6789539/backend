@@ -1,4 +1,4 @@
-import { isNull } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -15,12 +15,12 @@ export const facilities = pgTable(
   'facilities',
   {
     id: uuid('id').primaryKey().$defaultFn(uuidv7),
-    // Null marks a built-in facility every dealer sees; set for a dealer's own facilities
-    companyId: uuid('company_id').references(() => companies.id, {
-      onDelete: 'restrict',
-    }),
+    // Every company owns its own facilities, starting from a copy of the defaults
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 100 }).notNull(),
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -30,20 +30,13 @@ export const facilities = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Case-insensitive, so "Parking" and "parking" cannot both exist for one dealer
     uniqueIndex('facilities_company_name_unique_idx').on(
       table.companyId,
-      table.name,
+      sql`lower(${table.name})`,
     ),
-    // NULLs are distinct in a plain unique index, so built-ins need their own
-    uniqueIndex('facilities_built_in_name_unique_idx')
-      .on(table.name)
-      .where(isNull(table.companyId)),
     index('facilities_company_created_at_idx').on(
       table.companyId,
-      table.createdAt.desc(),
-      table.id.desc(),
-    ),
-    index('facilities_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),
     ),

@@ -3,14 +3,14 @@ import { PropertyPurpose } from '../../../common/enums/property-purpose.enum.js'
 import { PropertyStatus } from '../../../common/enums/property-status.enum.js';
 import { RequirementPurpose } from '../../../common/enums/requirement-purpose.enum.js';
 import { RequirementStatus } from '../../../common/enums/requirement-status.enum.js';
-import { BUILT_IN_FACILITIES } from '../../../modules/facilities/facilities.constants.js';
-import { BUILT_IN_PROPERTY_TYPES } from '../../../modules/property-types/property-types.constants.js';
+import { DEFAULT_FACILITIES } from '../../../modules/facilities/facilities.constants.js';
+import { DEFAULT_PROPERTY_TYPES } from '../../../modules/property-types/property-types.constants.js';
 import { DEMO_DATASET } from './demo-dataset.js';
 
 const { cities, contacts, facilities, properties, propertyTypes, requirements } = DEMO_DATASET;
 const contactDays = new Map(contacts.map((contact) => [contact.key, contact.createdDaysAgo]));
 const typeNames = new Set([
-  ...BUILT_IN_PROPERTY_TYPES,
+  ...DEFAULT_PROPERTY_TYPES,
   ...propertyTypes.map((type) => type.name),
 ]);
 
@@ -70,14 +70,14 @@ describe('DEMO_DATASET', () => {
   });
 
   it('only references facilities that exist before the record', () => {
-    const builtInNames = new Set(BUILT_IN_FACILITIES);
+    const defaultNames = new Set(DEFAULT_FACILITIES);
     const customDays = new Map(facilities.map((facility) => [facility.name, facility.createdDaysAgo]));
 
     for (const row of [...properties, ...requirements]) {
       for (const name of row.facilityNames ?? []) {
         const customCreatedDaysAgo = customDays.get(name);
 
-        expect(builtInNames.has(name) || customCreatedDaysAgo !== undefined, name).toBe(true);
+        expect(defaultNames.has(name) || customCreatedDaysAgo !== undefined, name).toBe(true);
 
         if (customCreatedDaysAgo !== undefined) {
           expect(customCreatedDaysAgo, name).toBeGreaterThanOrEqual(row.createdDaysAgo);
@@ -86,11 +86,11 @@ describe('DEMO_DATASET', () => {
     }
   });
 
-  it('never gives a custom facility a built-in name', () => {
-    const builtInNames = new Set(BUILT_IN_FACILITIES);
+  it('never gives a custom facility a default name', () => {
+    const defaultNames = new Set(DEFAULT_FACILITIES);
 
     for (const facility of facilities) {
-      expect(builtInNames.has(facility.name), facility.name).toBe(false);
+      expect(defaultNames.has(facility.name), facility.name).toBe(false);
     }
   });
 
