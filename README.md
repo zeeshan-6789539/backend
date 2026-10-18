@@ -111,6 +111,7 @@ openssl rand -hex 32                                                            
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
 | `pnpm db:seed:demo` | Seed a trailing 12-month Pakistani demo dataset: 3 companies with properties, tenants, leases, rent schedules, charges and payments (idempotent per company) |
 | `pnpm db:reset` | Drop and recreate the local database (refuses to run when `NODE_ENV=production`) |
+| `pnpm db:migrate:property-types` | One-off: moves an existing database from the old `property_type` enum to the `property_types` table (seeds each company's defaults and links every property). Run it **before** `db:push`; it does nothing on a database that was already moved |
 | `pnpm db:studio` | Drizzle Studio |
 | `pnpm db:generate` / `db:migrate` | drizzle-kit migration commands. Not part of the normal workflow; see [Schema changes](#schema-changes) |
 
@@ -164,7 +165,8 @@ rms-backend/
 ├── drizzle.config.ts              # drizzle-kit: schema path + DATABASE_URL
 ├── nest-cli.json
 ├── scripts/
-│   └── reset-db.ts                # pnpm db:reset (drop + recreate local DB)
+│   ├── reset-db.ts                # pnpm db:reset (drop + recreate local DB)
+│   └── migrate-property-types.ts  # pnpm db:migrate:property-types (one-off enum → table move)
 ├── test/                          # e2e specs + vitest setup (TZ=UTC)
 └── src/
     ├── main.ts                    # Bootstrap: logger, helmet, compression, CORS, prefix, versioning, Swagger
@@ -180,7 +182,7 @@ rms-backend/
     │   │                          # @RateLimit @RequestTimeout @SkipResponseTransform @IsMoneyString
     │   ├── dto/                   # PaginationQueryDto, UuidParamDto, AssignedEntityDto
     │   ├── enums/                 # UserRole, LeaseStatus, ChargeType, TransactionType, PaymentMethod,
-    │   │                          # PropertyType, SortOrder, ErrorCode, DashboardTrendRange
+    │   │                          # DefaultPropertyType, SortOrder, ErrorCode, DashboardTrendRange
     │   ├── filters/               # AllExceptionsFilter → error envelope
     │   ├── guards/                # RateLimitGuard (in-memory buckets)
     │   ├── interceptors/          # ResponseInterceptor (success envelope), TimeoutInterceptor
@@ -199,6 +201,7 @@ rms-backend/
         ├── auth/                  # register, login, refresh rotation, logout, me, JWT strategy, guards
         ├── users/                 # super_admin: platform user management
         ├── companies/             # super_admin: company management + mail settings
+        ├── property-types/        # client_admin: the company's own property type list
         ├── properties/            # client_admin: properties with per-company numbers (P-0001)
         ├── tenants/               # client_admin: tenants
         ├── leases/                # client_admin: leases, status changes, rent schedule changes
@@ -235,6 +238,8 @@ erDiagram
   companies ||--o{ users : "employs (nullable for super_admin)"
   users ||--o{ refresh_tokens : "has sessions"
   companies ||--o{ properties : owns
+  companies ||--o{ property_types : defines
+  property_types ||--o{ properties : classifies
   companies ||--o{ tenants : has
   properties ||--o{ leases : "leased via"
   tenants ||--o{ leases : signs
@@ -289,8 +294,16 @@ erDiagram
     varchar name
     varchar address_line1
     varchar city
-    property_type property_type
+    uuid property_type_id FK
     smallint rent_due_day "1-28"
+    boolean is_active
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  property_types {
+    uuid id PK
+    uuid company_id FK
+    varchar name "unique per company, case-insensitive"
     boolean is_active
     timestamptz created_at
     timestamptz updated_at
@@ -372,7 +385,8 @@ erDiagram
 | `companies` | A property-management company (the multi-tenant boundary) | `next_property_number` is the per-company counter for property numbers |
 | `users` | Login accounts | `users_email_unique_idx` (email is the login id); check `users_super_admin_has_no_company` |
 | `refresh_tokens` | One row per issued refresh token, keyed by its `jti` | `ON DELETE CASCADE` from users |
-| `properties` | A rentable unit | Unique `(company_id, property_number)`; check `rent_due_day BETWEEN 1 AND 28` |
+| `property_types` | A company's own list of property types (Home, Shop, ...) | Unique index `property_types_company_id_name_key` on `(company_id, lower(name))` |
+| `properties` | A rentable unit | Unique `(company_id, property_number)`; check `rent_due_day BETWEEN 1 AND 28`; `(property_type_id, company_id)` → `property_types(id, company_id)` |
 | `tenants` | A person who rents | — |
 | `leases` | Ties one tenant to one property for a date range | Partial unique index `leases_one_active_per_property_idx`: **at most one `active` lease per property** |
 | `lease_rent_schedules` | Rent amount history for a lease | Partial unique index: **at most one `is_current` schedule per lease** |
@@ -384,7 +398,6 @@ erDiagram
 | Postgres enum | Values |
 | --- | --- |
 | `user_role` | `super_admin`, `client_admin`, `manager`, `staff`, `customer` |
-| `property_type` | `home`, `apartment`, `room`, `shop`, `office`, `warehouse`, `land`, `other` |
 | `lease_status` | `active`, `terminated`, `expired` |
 | `charge_type` | `monthly_rent`\*, `rent_change`\*, `electricity_bill`, `water_bill`, `maintenance_charge`, `other_charge`, `advance_payment`, `discount_adjustment`, `advance_refund` |
 | `transaction_type` | `debit`, `credit` (only `discount_adjustment` is a credit) |
@@ -394,9 +407,10 @@ erDiagram
 
 ### Cross-company integrity
 
-`properties`, `tenants`, `leases` and `payments` each have a unique `(id, company_id)` key. Child tables reference the **pair**, not just the id:
+`property_types`, `properties`, `tenants`, `leases` and `payments` each have a unique `(id, company_id)` key. Child tables reference the **pair**, not just the id:
 
 ```
+properties(property_type_id, company_id)   → property_types(id, company_id)
 leases(property_id, company_id)            → properties(id, company_id)
 leases(tenant_id, company_id)              → tenants(id, company_id)
 lease_rent_schedules(lease_id, company_id) → leases(id, company_id)
@@ -470,6 +484,7 @@ db:seed → super_admin
 - A `super_admin` can't have a `companyId`. The service checks this, and so does a DB check constraint.
 - When a user is created, a **welcome email** with the login details goes out from the platform account (sender name "MIFA Alliance"). Changing a password through `PATCH /users/:id` sends a **password-changed email**.
 - A company can't be deactivated while it still has active users. Deactivate the users first.
+- Every new company starts with the default property types Home, Apartment, Room, Shop, Office, Warehouse, Land and Other, inserted in the same transaction as the company.
 - `companies.mail_password` is AES-256-GCM encrypted with `MAIL_ENCRYPTION_KEY` and is never returned by the API.
 
 ### 3. Company operations (client_admin)
@@ -488,7 +503,9 @@ flowchart TD
   PAY --> ST
 ```
 
-**Properties.** Each property gets a human-readable number (`P-0001`, `P-0002`, ...) from `companies.next_property_number`, which is incremented in the same transaction as the insert. The number never changes. `rent_due_day` (1–28) sets which day of the month the generated rent falls due.
+**Properties.** Each property gets a human-readable number (`P-0001`, `P-0002`, ...) from `companies.next_property_number`, which is incremented in the same transaction as the insert. The number never changes. `rent_due_day` (1–28) sets which day of the month the generated rent falls due. `propertyTypeId` must be an **active** type from the caller's own company (`GET /property-types?status=true` lists them).
+
+**Property types.** A client admin manages the company's own list through `/property-types`: add, rename, deactivate or restore. Names are unique per company, ignoring case. Deactivating a type removes it from the property form, but properties that already use it keep it. Renaming a type renames it on every property that uses it. A property can keep a type that was deactivated later, but can't be switched to one. Responses include both `propertyTypeId` and `propertyTypeName`.
 
 **Leases.**
 - Creating a lease requires the property and the tenant to be active, and the property to have no other active lease. The pre-check gives a clear message, and `leases_one_active_per_property_idx` is the real guard against races.
@@ -543,6 +560,7 @@ All routes are under `/api/v1` unless noted. Swagger at `/docs` is the authorita
 | **auth** | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` | Public (login is limited to 5/min) |
 | | `POST /auth/logout-all` · `GET /auth/me` | Any signed-in user |
 | **companies** | `POST` · `GET` · `GET /:id` · `PATCH /:id` · `PATCH /:id/restore` · `DELETE /:id` | super_admin |
+| **property-types** | `POST` · `GET` · `GET /:id` · `PATCH /:id` · `PATCH /:id/restore` · `DELETE /:id` | client_admin |
 | **users** | `POST` · `GET` · `GET /:id` · `PATCH /:id` · `PATCH /:id/restore` · `DELETE /:id` | super_admin |
 | **properties** | `POST` · `GET` · `GET /:id` · `PATCH /:id` · `PATCH /:id/restore` · `DELETE /:id` | client_admin |
 | **tenants** | `POST` · `GET` · `GET /:id` · `PATCH /:id` · `PATCH /:id/restore` · `DELETE /:id` | client_admin |

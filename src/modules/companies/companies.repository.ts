@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { DefaultPropertyType } from '../../common/enums/default-property-type.enum.js';
 import { SortOrder } from '../../common/enums/sort-order.enum.js';
 import { withDatabaseErrors } from '../../common/utils/database-error.util.js';
 import { getOffset } from '../../common/utils/pagination.util.js';
@@ -13,6 +14,7 @@ import type { IDrizzleDb } from '../../database/interfaces/i-drizzle-db.js';
 import {
   companies,
   properties,
+  propertyTypes,
   tenants,
 } from '../../database/schema/index.js';
 import { COMPANY_CONSTRAINT_MESSAGES } from './companies.constants.js';
@@ -102,11 +104,25 @@ export class CompaniesRepository {
     );
   }
 
+  // Seeds the default property types in the same transaction so a new company can add properties at once
   async create(data: INewCompanyRow): Promise<ICompanyRow> {
     return withDatabaseErrors(async () => {
-      const [row] = await this.db.insert(companies).values(data).returning();
+      return this.db.transaction(async (tx) => {
+        const [row] = await tx.insert(companies).values(data).returning();
 
-      return row;
+        if (!row) {
+          throw new Error('Failed to create company');
+        }
+
+        await tx.insert(propertyTypes).values(
+          Object.values(DefaultPropertyType).map((name) => ({
+            companyId: row.id,
+            name,
+          })),
+        );
+
+        return row;
+      });
     }, COMPANY_CONSTRAINT_MESSAGES);
   }
 

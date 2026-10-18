@@ -24,6 +24,7 @@ import { LeasesModule } from './modules/leases/leases.module.js';
 import { LedgerModule } from './modules/ledger/ledger.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { PropertiesModule } from './modules/properties/properties.module.js';
+import { PropertyTypesModule } from './modules/property-types/property-types.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -47,6 +48,7 @@ import { UsersModule } from './modules/users/users.module.js';
     AuthModule,
     UsersModule,
     CompaniesModule,
+    PropertyTypesModule,
     PropertiesModule,
     TenantsModule,
     LeasesModule,

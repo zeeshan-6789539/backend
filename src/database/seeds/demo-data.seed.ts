@@ -1,6 +1,7 @@
 import type { Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { ChargeType } from '../../common/enums/charge-type.enum.js';
+import { DefaultPropertyType } from '../../common/enums/default-property-type.enum.js';
 import { LeaseStatus } from '../../common/enums/lease-status.enum.js';
 import { PaymentMethod } from '../../common/enums/payment-method.enum.js';
 import { TransactionType } from '../../common/enums/transaction-type.enum.js';
@@ -15,6 +16,7 @@ import {
   leases,
   payments,
   properties,
+  propertyTypes,
   tenants,
   users,
 } from '../schema/index.js';
@@ -712,11 +714,23 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
     }
   }
 
+  const seededTypes = await tx
+    .insert(propertyTypes)
+    .values(Object.values(DefaultPropertyType).map((name) => ({ companyId: company.id, name })))
+    .returning({ id: propertyTypes.id, name: propertyTypes.name });
+  const propertyTypeIdByName = new Map(seededTypes.map((type) => [type.name, type.id]));
+
   const chargeRows: ChargeInsert[] = [];
   const paymentRows: PaymentInsert[] = [];
   let receiptSeq = 1;
 
   for (const [index, propertyPlan] of plan.properties.entries()) {
+    const propertyTypeId = propertyTypeIdByName.get(propertyPlan.propertyType);
+
+    if (!propertyTypeId) {
+      throw new Error(`Property type "${propertyPlan.propertyType}" was not seeded for "${plan.name}"`);
+    }
+
     const [property] = await tx
       .insert(properties)
       .values({
@@ -725,7 +739,7 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
         name: propertyPlan.name,
         addressLine1: propertyPlan.addressLine1,
         city: propertyPlan.city,
-        propertyType: propertyPlan.propertyType,
+        propertyTypeId,
         rentDueDay: SEED_RENT_DUE_DAY,
         isActive: true,
       })

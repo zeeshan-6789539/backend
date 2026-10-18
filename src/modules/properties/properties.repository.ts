@@ -13,15 +13,27 @@ import type {
   INewPropertyRow,
   IPropertyRow,
 } from '../../database/interfaces/i-property-row.js';
-import { companies, leases, properties, tenants } from '../../database/schema/index.js';
+import {
+  companies,
+  leases,
+  properties,
+  propertyTypes,
+  tenants,
+} from '../../database/schema/index.js';
 import {
   PROPERTY_CONSTRAINT_MESSAGES,
   PROPERTY_NUMBER_PREFIX,
 } from './properties.constants.js';
 import type { IFindPropertiesOptions } from './interfaces/i-find-properties-options.js';
 import type { IPropertyListResult } from './interfaces/i-property-list-result.js';
+import type { IPropertyWithType } from './interfaces/i-property-with-type.js';
 
-const SEARCHABLE_COLUMNS = [properties.propertyNumber, properties.name, properties.city];
+const SEARCHABLE_COLUMNS = [
+  properties.propertyNumber,
+  properties.name,
+  properties.city,
+  propertyTypes.name,
+];
 
 // The tenant(s) with an active lease on this property — every column below is hand-qualified
 // because leases and tenants both have id/status, and sql`` interpolation renders columns bare
@@ -39,10 +51,11 @@ export class PropertiesRepository {
   async findById(
     id: string,
     companyId: string,
-  ): Promise<IPropertyRow | undefined> {
+  ): Promise<IPropertyWithType | undefined> {
     const [row] = await this.db
-      .select()
+      .select({ ...getTableColumns(properties), propertyTypeName: propertyTypes.name })
       .from(properties)
+      .innerJoin(propertyTypes, eq(propertyTypes.id, properties.propertyTypeId))
       .where(and(eq(properties.id, id), eq(properties.companyId, companyId)))
       .limit(1);
 
@@ -55,14 +68,23 @@ export class PropertiesRepository {
 
     const [items, [total]] = await Promise.all([
       this.db
-        .select({ ...getTableColumns(properties), tenants: ASSIGNED_TENANTS_SQL })
+        .select({
+          ...getTableColumns(properties),
+          propertyTypeName: propertyTypes.name,
+          tenants: ASSIGNED_TENANTS_SQL,
+        })
         .from(properties)
+        .innerJoin(propertyTypes, eq(propertyTypes.id, properties.propertyTypeId))
         .where(where)
         // id breaks ties so rows created in the same millisecond stay stable
         .orderBy(direction(properties.createdAt), direction(properties.id))
         .limit(options.limit)
         .offset(getOffset(options.page, options.limit)),
-      this.db.select({ value: count() }).from(properties).where(where),
+      this.db
+        .select({ value: count() })
+        .from(properties)
+        .innerJoin(propertyTypes, eq(propertyTypes.id, properties.propertyTypeId))
+        .where(where),
     ]);
 
     return { items, totalItems: total?.value ?? 0 };
@@ -139,8 +161,8 @@ export class PropertiesRepository {
       conditions.push(eq(properties.city, options.city));
     }
 
-    if (options.propertyType) {
-      conditions.push(eq(properties.propertyType, options.propertyType));
+    if (options.propertyTypeId) {
+      conditions.push(eq(properties.propertyTypeId, options.propertyTypeId));
     }
 
     if (options.status !== undefined) {

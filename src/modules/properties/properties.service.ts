@@ -1,34 +1,43 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { IPaginatedResult } from '../../common/interfaces/i-paginated-result.js';
 import { buildPaginatedResult } from '../../common/utils/pagination.util.js';
-import type { IPropertyRow } from '../../database/interfaces/i-property-row.js';
+import { PropertyTypesService } from '../property-types/property-types.service.js';
 import { PropertiesRepository } from './properties.repository.js';
 import type { CreatePropertyDto } from './dto/create-property.dto.js';
 import type { PropertyListResponseDto } from './dto/property-list-response.dto.js';
 import type { PropertyResponseDto } from './dto/property-response.dto.js';
 import type { QueryPropertiesDto } from './dto/query-properties.dto.js';
 import type { UpdatePropertyDto } from './dto/update-property.dto.js';
+import type { IPropertyWithType } from './interfaces/i-property-with-type.js';
 import { toPropertyListResponse, toPropertyResponse } from './mappers/property.mapper.js';
 
 @Injectable()
 export class PropertiesService {
-  constructor(private readonly propertiesRepository: PropertiesRepository) {}
+  constructor(
+    private readonly propertiesRepository: PropertiesRepository,
+    private readonly propertyTypesService: PropertyTypesService,
+  ) {}
 
   async create(
     companyId: string,
     dto: CreatePropertyDto,
   ): Promise<PropertyResponseDto> {
+    const propertyType = await this.propertyTypesService.assertAssignable(
+      companyId,
+      dto.propertyTypeId,
+    );
+
     const row = await this.propertiesRepository.create({
       companyId,
       name: dto.name.trim(),
       addressLine1: dto.addressLine1,
       city: dto.city,
-      propertyType: dto.propertyType,
+      propertyTypeId: propertyType.id,
       rentDueDay: dto.rentDueDay,
       isActive: dto.status,
     });
 
-    return toPropertyResponse(row);
+    return toPropertyResponse({ ...row, propertyTypeName: propertyType.name });
   }
 
   async findAll(
@@ -41,7 +50,7 @@ export class PropertiesService {
       limit: query.limit,
       search: query.search,
       city: query.city,
-      propertyType: query.propertyType,
+      propertyTypeId: query.propertyTypeId,
       status: query.status,
       sortOrder: query.sortOrder,
     });
@@ -63,14 +72,21 @@ export class PropertiesService {
     id: string,
     dto: UpdatePropertyDto,
   ): Promise<PropertyResponseDto> {
-    await this.findRowOrFail(companyId, id);
+    const current = await this.findRowOrFail(companyId, id);
+
+    // Keeping a since-deactivated type is fine; only switching to a new one must pass the check
+    const nextTypeId = dto.propertyTypeId;
+    const propertyTypeName =
+      nextTypeId !== undefined && nextTypeId !== current.propertyTypeId
+        ? (await this.propertyTypesService.assertAssignable(companyId, nextTypeId)).name
+        : current.propertyTypeName;
 
     // Drizzle skips undefined keys, so unset DTO fields leave the column alone
     const row = await this.propertiesRepository.update(id, companyId, {
       name: dto.name?.trim(),
       addressLine1: dto.addressLine1,
       city: dto.city,
-      propertyType: dto.propertyType,
+      propertyTypeId: dto.propertyTypeId,
       rentDueDay: dto.rentDueDay,
       isActive: dto.status,
       updatedAt: new Date(),
@@ -82,7 +98,7 @@ export class PropertiesService {
       );
     }
 
-    return toPropertyResponse(row);
+    return toPropertyResponse({ ...row, propertyTypeName });
   }
 
   // Deleting a property deactivates it: status goes false, the row is kept
@@ -101,7 +117,7 @@ export class PropertiesService {
       throw new NotFoundException(`No property was found with id ${id}`);
     }
 
-    return toPropertyResponse(row);
+    return toPropertyResponse({ ...row, propertyTypeName: current.propertyTypeName });
   }
 
   async restore(companyId: string, id: string): Promise<PropertyResponseDto> {
@@ -119,10 +135,10 @@ export class PropertiesService {
       throw new NotFoundException(`No property was found with id ${id}`);
     }
 
-    return toPropertyResponse(row);
+    return toPropertyResponse({ ...row, propertyTypeName: current.propertyTypeName });
   }
 
-  async findRowOrFail(companyId: string, id: string): Promise<IPropertyRow> {
+  async findRowOrFail(companyId: string, id: string): Promise<IPropertyWithType> {
     const row = await this.propertiesRepository.findById(id, companyId);
 
     if (!row) {

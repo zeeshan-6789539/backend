@@ -1,6 +1,7 @@
 export * from './companies.schema.js';
 export * from './users.schema.js';
 export * from './refresh-tokens.schema.js';
+export * from './property-types.schema.js';
 export * from './properties.schema.js';
 export * from './tenants.schema.js';
 export * from './leases.schema.js';

@@ -1,16 +1,19 @@
-import type { IPropertyRow } from '../../../database/interfaces/i-property-row.js';
 import type { PropertyListResponseDto } from '../dto/property-list-response.dto.js';
 import type { PropertyResponseDto } from '../dto/property-response.dto.js';
 import type { IPropertyListRow } from '../interfaces/i-property-list-row.js';
+import type { IPropertyWithType } from '../interfaces/i-property-with-type.js';
 
-export const toPropertyResponse = (row: IPropertyRow): PropertyResponseDto => ({
+export const toPropertyResponse = (
+  row: IPropertyWithType,
+): PropertyResponseDto => ({
   id: row.id,
   companyId: row.companyId,
   propertyNumber: row.propertyNumber,
   name: row.name,
   addressLine1: row.addressLine1,
   city: row.city,
-  propertyType: row.propertyType,
+  propertyTypeId: row.propertyTypeId,
+  propertyTypeName: row.propertyTypeName,
   rentDueDay: row.rentDueDay,
   status: row.isActive,
   createdAt: row.createdAt,
@@ -26,7 +29,8 @@ export const toPropertyListResponse = (
   name: row.name,
   addressLine1: row.addressLine1,
   city: row.city,
-  propertyType: row.propertyType,
+  propertyTypeId: row.propertyTypeId,
+  propertyTypeName: row.propertyTypeName,
   rentDueDay: row.rentDueDay,
   status: row.isActive,
   createdAt: row.createdAt,

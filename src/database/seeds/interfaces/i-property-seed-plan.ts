@@ -1,4 +1,4 @@
-import type { PropertyType } from '../../../common/enums/property-type.enum.js';
+import type { DefaultPropertyType } from '../../../common/enums/default-property-type.enum.js';
 
 export interface IRentChangeSeedPlan {
   atIndex: number;
@@ -21,7 +21,7 @@ export interface IPropertySeedPlan {
   name: string;
   addressLine1: string;
   city: string;
-  propertyType: PropertyType;
+  propertyType: DefaultPropertyType;
   monthlyRent: number;
   // Only set when `turnover` is set — the rent charged to the incoming tenant
   secondSegmentRent?: number;

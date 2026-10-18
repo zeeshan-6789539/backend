@@ -47,7 +47,7 @@ export class PropertiesController {
   @ApiOperation({
     summary: 'List properties, paginated and searchable',
     description:
-      'Newest first by default. Filter with city, propertyType and status; search matches name and city.',
+      'Newest first by default. Filter with city, propertyTypeId and status; search matches number, name, city and type name.',
   })
   findAll(
     @CurrentCompanyId() companyId: string,

@@ -1,8 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto.js';
-import { PropertyType } from '../../../common/enums/property-type.enum.js';
 
 export class QueryPropertiesDto extends PaginationQueryDto {
   @ApiPropertyOptional({ example: 'Karachi' })
@@ -11,15 +16,14 @@ export class QueryPropertiesDto extends PaginationQueryDto {
   @IsOptional()
   city?: string;
 
-  @ApiPropertyOptional({ enum: PropertyType })
-  @IsEnum(PropertyType, {
-    message: `propertyType must be one of: ${Object.values(PropertyType).join(', ')}`,
-  })
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsUUID(undefined, { message: 'propertyTypeId must be a valid UUID' })
   @IsOptional()
-  propertyType?: PropertyType;
+  propertyTypeId?: string;
 
   @ApiPropertyOptional({
-    description: 'true returns active properties, false returns deactivated ones',
+    description:
+      'true returns active properties, false returns deactivated ones',
   })
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()

@@ -2,8 +2,8 @@ import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
-  pgEnum,
   pgTable,
   smallint,
   timestamp,
@@ -16,15 +16,10 @@ import {
   MAX_RENT_DUE_DAY,
   MIN_RENT_DUE_DAY,
 } from '../../common/constants/rent-due-day.constants.js';
-import { PropertyType } from '../../common/enums/property-type.enum.js';
 import { uuidv7 } from '../../common/utils/uuid.util.js';
 import { companies } from './companies.schema.js';
 import { leases } from './leases.schema.js';
-
-export const propertyTypeEnum = pgEnum(
-  'property_type',
-  Object.values(PropertyType) as [PropertyType, ...PropertyType[]],
-);
+import { propertyTypes } from './property-types.schema.js';
 
 export const properties = pgTable(
   'properties',
@@ -38,9 +33,7 @@ export const properties = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     addressLine1: varchar('address_line1', { length: 500 }).notNull(),
     city: varchar('city', { length: 100 }).notNull(),
-    propertyType: propertyTypeEnum('property_type')
-      .notNull()
-      .default(PropertyType.HOME),
+    propertyTypeId: uuid('property_type_id').notNull(),
     // Day of the month the generated monthly rent invoice falls due
     rentDueDay: smallint('rent_due_day').notNull().default(DEFAULT_RENT_DUE_DAY),
     // true is active, false is deactivated — mirrors companies.is_active
@@ -56,6 +49,7 @@ export const properties = pgTable(
   (table) => [
     index('properties_name_idx').on(table.name),
     index('properties_is_active_idx').on(table.isActive),
+    index('properties_property_type_id_idx').on(table.propertyTypeId),
     index('properties_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),
@@ -75,6 +69,12 @@ export const properties = pgTable(
       'properties_rent_due_day_range_check',
       sql`${table.rentDueDay} between ${sql.raw(String(MIN_RENT_DUE_DAY))} and ${sql.raw(String(MAX_RENT_DUE_DAY))}`,
     ),
+    // Composite FK pins property_type_id to a type owned by this same company
+    foreignKey({
+      columns: [table.propertyTypeId, table.companyId],
+      foreignColumns: [propertyTypes.id, propertyTypes.companyId],
+      name: 'properties_property_type_company_fk',
+    }),
   ],
 );
 
@@ -82,6 +82,10 @@ export const propertiesRelations = relations(properties, ({ one, many }) => ({
   company: one(companies, {
     fields: [properties.companyId],
     references: [companies.id],
+  }),
+  propertyType: one(propertyTypes, {
+    fields: [properties.propertyTypeId],
+    references: [propertyTypes.id],
   }),
   leases: many(leases),
 }));

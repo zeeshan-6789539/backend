@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -15,7 +15,6 @@ import {
   MAX_RENT_DUE_DAY,
   MIN_RENT_DUE_DAY,
 } from '../../../common/constants/rent-due-day.constants.js';
-import { PropertyType } from '../../../common/enums/property-type.enum.js';
 
 const RENT_DUE_DAY_MESSAGE = `rentDueDay must be a whole day of the month between ${MIN_RENT_DUE_DAY} and ${MAX_RENT_DUE_DAY}`;
 
@@ -36,11 +35,12 @@ export class CreatePropertyDto {
   @MaxLength(100)
   city!: string;
 
-  @ApiProperty({ enum: PropertyType, example: PropertyType.HOME })
-  @IsEnum(PropertyType, {
-    message: `propertyType must be one of: ${Object.values(PropertyType).join(', ')}`,
+  @ApiProperty({
+    format: 'uuid',
+    description: "An active type from your company's property type list",
   })
-  propertyType!: PropertyType;
+  @IsUUID(undefined, { message: 'propertyTypeId must be a valid UUID' })
+  propertyTypeId!: string;
 
   @ApiPropertyOptional({
     minimum: MIN_RENT_DUE_DAY,
