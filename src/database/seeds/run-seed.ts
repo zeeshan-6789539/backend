@@ -2,6 +2,7 @@ import '../../bootstrap/timezone.bootstrap.js';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module.js';
+import { describeError } from '../../common/utils/error.util.js';
 import { seedConfig } from '../../config/seed.config.js';
 import type { ISeedConfig } from '../../config/interfaces/i-seed-config.js';
 import { UsersService } from '../../modules/users/users.service.js';
@@ -19,9 +20,7 @@ try {
   );
   logger.log('Seeding complete');
 } catch (error) {
-  logger.error(
-    `Seeding failed: ${error instanceof Error ? error.message : String(error)}`,
-  );
+  logger.error(`Seeding failed: ${describeError(error)}`);
   process.exitCode = 1;
 } finally {
   await app.close();

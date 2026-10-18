@@ -2,6 +2,7 @@ import '../../bootstrap/timezone.bootstrap.js';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module.js';
+import { describeError } from '../../common/utils/error.util.js';
 import { seedConfig } from '../../config/seed.config.js';
 import type { ISeedConfig } from '../../config/interfaces/i-seed-config.js';
 import { DRIZZLE } from '../database.constants.js';
@@ -26,9 +27,7 @@ try {
   );
   logger.log('Demo seeding complete');
 } catch (error) {
-  logger.error(
-    `Demo seeding failed: ${error instanceof Error ? error.message : String(error)}`,
-  );
+  logger.error(`Demo seeding failed: ${describeError(error)}`);
   process.exitCode = 1;
 } finally {
   await app.close();
