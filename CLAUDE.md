@@ -75,7 +75,7 @@ Controller checklist:
 
 - **ESM.** Every relative import ends in `.js`, including from `.ts` files. TypeScript is `nodenext`.
 - **pnpm only.** Never run `npm install` — it writes a `package-lock.json` that conflicts with `pnpm-lock.yaml`.
-- **Schema changes: no migration files.** Edit the Drizzle schema directly; the user runs `db:push` and `db:seed` themselves.
+- **Schema changes go through migrations.** Edit the Drizzle schema; the user runs `db:generate` then `db:migrate` themselves. Never edit or delete files in `src/database/migrations/`, and never `db:push` to production.
 - **`status`, not `deleted_at`.** One boolean per row — `true` active, `false` deactivated. `DELETE` flips it to false, `PATCH /:id/restore` flips it back. Rows are never physically removed. Reads do *not* filter on `status`, so an admin can still see and restore a deactivated row; auth paths reject `status: false` explicitly.
 - **UUIDv7 ids.** Validate with `@IsUUID()` (any version) — `@IsUUID('4')` rejects every id this app issues.
 - **UTC everywhere.** Columns are `timestamptz`, the PG session and the Node process are both pinned to UTC.

@@ -15,7 +15,7 @@ This project uses **pnpm only** — `packageManager` is pinned in `package.json`
 ```bash
 pnpm install
 cp .env.example .env     # then fill in DATABASE_URL, the two JWT secrets and MAIL_*
-pnpm db:push             # pushes src/database/schema straight to the database
+pnpm db:migrate          # applies src/database/migrations to the database
 pnpm db:seed             # creates the super admin from SEED_SUPER_ADMIN_* (set SEED_SUPER_ADMIN_PASSWORD first)
 pnpm start:dev
 ```
@@ -50,7 +50,8 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 | `pnpm test:e2e` | End-to-end tests |
 | `pnpm db:generate` | Generate a migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:push` | Push schema straight to the DB (dev only) |
+| `pnpm db:push` | Push schema straight to the DB without a migration (throwaway local prototyping only — never production) |
+| `pnpm db:reset` | Truncate every table in `DATABASE_URL`'s `public` schema, keeping the schema (refuses with `NODE_ENV=production`) |
 | `pnpm db:seed` | Create the super admin from `SEED_SUPER_ADMIN_*` (idempotent) |
 | `pnpm db:studio` | Drizzle Studio |
 
@@ -70,18 +71,20 @@ src/
 │   └── interfaces/
 ├── common/                     # Cross-cutting, domain-agnostic building blocks
 │   ├── constants/
-│   ├── decorators/             # @Public, @Roles, @CurrentUser, @SkipResponseTransform
+│   ├── decorators/             # @Public, @Roles, @CurrentUser, @RateLimit, @SkipResponseTransform
 │   ├── dto/                    # PaginationQueryDto, UuidParamDto
 │   ├── enums/
 │   ├── filters/                # AllExceptionsFilter
+│   ├── guards/                 # RateLimitGuard (in-memory, per IP)
 │   ├── interceptors/           # ResponseInterceptor, TimeoutInterceptor
 │   ├── interfaces/
-│   └── utils/                  # Reusable pure helpers (hash, pagination, string, jwt)
+│   ├── middleware/             # Request logger
+│   └── utils/                  # Reusable pure helpers (hash, pagination, string, jwt, logger)
 ├── database/                   # Drizzle wiring — one global module
 │   ├── database.module.ts      # Provides DRIZZLE + PG_POOL, closes pool on shutdown
 │   ├── database.constants.ts
 │   ├── schema/                 # One file per table + barrel index
-│   ├── migrations/             # Generated SQL — commit these
+│   ├── migrations/             # Generated SQL migrations + meta/ journal — committed, never edited by hand
 │   └── interfaces/             # Row types inferred from the schema
 └── modules/                    # Feature modules — add new domains here
     ├── auth/                   # Register, login, refresh rotation, logout, RBAC guards
@@ -156,9 +159,10 @@ In production the filter never returns an internal error's message; it logs the 
 
 - `@Public()` opts a route out of authentication.
 - `@Roles(UserRole.SUPER_ADMIN, UserRole.CLIENT_ADMIN)` restricts a route to specific roles.
-- `@CurrentUser()` injects `{ id, username, role, companyId }`; `@CurrentUser('id')` injects one field.
+- `@CurrentUser()` injects `{ id, role, companyId }`; `@CurrentUser('id')` injects one field.
+- `@RateLimit(limit, ttlMs)` overrides the global `THROTTLE_LIMIT` / `THROTTLE_TTL_MS` for one route or controller.
 
-Login uses **username, not email** — email is deliberately non-unique so several users can share one address. Roles are `super_admin` (platform-level, no company), `client_admin` (owns a company), `manager`, `staff`, `customer`.
+Login uses **email**, which is unique and stored as the login identifier. Roles are `super_admin` (platform-level, no company), `client_admin` (owns a company), `manager`, `staff`, `customer`.
 
 **Every `/users` and `/companies` route is `super_admin` only.** The restriction is declared once with `@Roles(UserRole.SUPER_ADMIN)` at the controller class, so a new route inherits it rather than having to remember it. The `/auth` routes stay open to their normal audiences — `register`, `login`, `refresh` and `logout` are public, `me` and `logout-all` need any authenticated user.
 
@@ -168,10 +172,14 @@ Refresh tokens are rotated on every use: the presented token is revoked and a ne
 
 1. Edit or add a table under `src/database/schema/`.
 2. Export it from `src/database/schema/index.ts`.
-3. `pnpm db:generate` to produce a migration.
-4. Review the generated SQL, then `pnpm db:migrate`.
+3. `pnpm db:generate --name <what_changed>` to write the next migration under `src/database/migrations/`. Read the SQL, then commit it with the schema change.
+4. `pnpm db:migrate` to apply pending migrations (same command locally and in production), then `pnpm db:seed` for seed data.
+
+Never edit or delete a committed migration, and never `db:push` to production: a pushed change that is later migrated fails with "already exists". `0000_init` is the baseline, generated from the current schema; a database created earlier with `db:push` should have it recorded as applied in `drizzle.__drizzle_migrations` instead of running its SQL.
 
 Tables: `companies` (tenants) → `users` (nullable `company_id`, since `super_admin` is platform-level) → `refresh_tokens`.
+
+Full column reference, ERD and data flows: [docs/DATABASE.md](docs/DATABASE.md).
 
 Inject the typed client with `@Inject(DRIZZLE) private readonly db: IDrizzleDb`.
 
@@ -187,7 +195,7 @@ Because ids are no longer v4, DTOs validate with `@IsUUID()` (any version) — `
 
 There is no soft-delete timestamp and no separate `is_active` flag. Each row carries one boolean, `status` — `true` is active, `false` is deactivated.
 
-`DELETE /users/:id` sets `status` to false and returns the updated row; `PATCH /users/:id/restore` sets it back to true. Rows are never physically removed, which keeps foreign keys and audit history intact. Reads (`findById`, `findByUsername`) deliberately do **not** filter on `status`, so an admin can still see and restore a deactivated user, while `login` and the JWT strategy reject `status: false` with an explicit message.
+`DELETE /users/:id` sets `status` to false and returns the updated row; `PATCH /users/:id/restore` sets it back to true. Rows are never physically removed, which keeps foreign keys and audit history intact. Reads (`findById`, `findByEmail`) deliberately do **not** filter on `status`, so an admin can still see and restore a deactivated user, while `login` and the JWT strategy reject `status: false` with an explicit message.
 
 ## Time and timezones
 
