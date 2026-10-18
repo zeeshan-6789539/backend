@@ -14,5 +14,6 @@ export const mailConfig = registerAs(MAIL_CONFIG_NAMESPACE, (): IMailConfig => {
     user: env.MAIL_USER,
     password: env.MAIL_PASSWORD,
     from: env.MAIL_FROM,
+    appName: env.APP_NAME,
   };
 });

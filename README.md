@@ -270,6 +270,7 @@ Locally, variables are read from `.env` only (gitignored; copy it from `.env.exa
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `NODE_ENV` | | `development` | `development`, `test` or `production` |
+| `APP_NAME` | | `RMS` | Product name shown in emails (header, subjects, body) and the Swagger title |
 | `PORT` | | `3000` | HTTP port (`.env.example` uses `5000`, which the frontend expects) |
 | `API_PREFIX` | | `api` | Global route prefix |
 | `API_VERSION` | | `1` | URI version, so routes live under `/api/v1` |
@@ -299,7 +300,6 @@ Locally, variables are read from `.env` only (gitignored; copy it from `.env.exa
 | `MAIL_SECURE` | | `false` | Use TLS from the start (usually `true` for port 465) |
 | `MAIL_USER` | ✔ | | SMTP username |
 | `MAIL_PASSWORD` | ✔ | | SMTP password |
-| `MAIL_FROM` | | `no-reply@rms.local` | Sender address |
-| `GOOGLE_STUDIO_KEY` | | | Google AI Studio key for the voice assistant; without it `POST /assistant/session` answers 503 |
+| `MAIL_FROM` | | `no-reply@rms.local` | Sender address || `GOOGLE_STUDIO_KEY` | | | Google AI Studio key for the voice assistant; without it `POST /assistant/session` answers 503 |
 | `GEMINI_LIVE_MODEL` | | `gemini-3.8-live` | Gemini Live model |
 | `GEMINI_SESSION_TTL_MINUTES` | | `30` | Voice session lifetime, 1–120 |
