@@ -18,6 +18,12 @@ export class UserResponseDto {
   })
   companyName?: string | null;
 
+  @ApiPropertyOptional({
+    description:
+      "Whether the user's company has the voice assistant; only populated on the authenticated profile response",
+  })
+  voiceAssistantEnabled?: boolean;
+
   @ApiProperty({ format: 'email' })
   email!: string;
 

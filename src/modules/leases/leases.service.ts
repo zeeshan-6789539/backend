@@ -26,11 +26,11 @@ export class LeasesService {
     const property = await this.propertiesService.findRowOrFail(companyId, dto.propertyId);
     const tenant = await this.tenantsService.findRowOrFail(companyId, dto.tenantId);
 
-    if (!property.status) {
+    if (!property.isActive) {
       throw new BadRequestException(`Property "${property.name}" is deactivated and cannot take on a new lease`);
     }
 
-    if (!tenant.status) {
+    if (!tenant.isActive) {
       throw new BadRequestException(`Tenant "${tenant.name}" is deactivated and cannot take on a new lease`);
     }
 

@@ -50,7 +50,7 @@ export const charges = pgTable(
     description: text('description'),
     // Single lifecycle flag: true is active, false is deactivated. A deactivated
     // charge stays visible in the ledger but is excluded from running-balance calculations.
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdBy: uuid('created_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -61,7 +61,7 @@ export const charges = pgTable(
       table.leaseId,
       table.createdAt,
     ),
-    index('charges_status_idx').on(table.status),
+    index('charges_is_active_idx').on(table.isActive),
     index('charges_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),
@@ -72,10 +72,10 @@ export const charges = pgTable(
       table.id.desc(),
     ),
     // At most one *active* monthly_rent charge per lease per billing month, closing the generate-monthly-rent
-    // duplicate-click race. Scoped to status = true so deactivating a charge lets the next run regenerate it.
+    // duplicate-click race. Scoped to is_active = true so deactivating a charge lets the next run regenerate it.
     uniqueIndex('charges_one_monthly_rent_per_lease_month_idx')
       .on(table.leaseId, table.billingMonth)
-      .where(sql`${table.chargeType} = 'monthly_rent' and ${table.status} = true`),
+      .where(sql`${table.chargeType} = 'monthly_rent' and ${table.isActive} = true`),
     // Composite FKs pin property_id/tenant_id/lease_id to the same company_id as this charge
     foreignKey({
       columns: [table.propertyId, table.companyId],

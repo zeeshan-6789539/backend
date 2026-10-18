@@ -9,8 +9,7 @@ export const aiConfig = registerAs(AI_CONFIG_NAMESPACE, (): IAiConfig => {
 
   return {
     apiKey: env.GOOGLE_STUDIO_KEY,
-    model: env.GEMINI_MODEL,
-    ttsModel: env.GEMINI_TTS_MODEL,
-    ttsVoice: env.GEMINI_TTS_VOICE,
+    liveModel: env.GEMINI_LIVE_MODEL,
+    sessionTtlMinutes: env.GEMINI_SESSION_TTL_MINUTES,
   };
 });

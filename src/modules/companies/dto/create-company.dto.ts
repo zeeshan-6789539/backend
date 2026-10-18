@@ -58,6 +58,14 @@ export class CreateCompanyDto {
   invoiceMailSend?: boolean;
 
   @ApiPropertyOptional({
+    default: false,
+    description: "true lets the company's client admins use the voice assistant",
+  })
+  @IsBoolean()
+  @IsOptional()
+  voiceAssistantEnabled?: boolean;
+
+  @ApiPropertyOptional({
     writeOnly: true,
     description: 'SMTP password for the company email; stored encrypted and never returned',
   })

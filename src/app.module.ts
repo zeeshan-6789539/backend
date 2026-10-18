@@ -13,7 +13,7 @@ import { jwtConfig } from './config/jwt.config.js';
 import { mailConfig } from './config/mail.config.js';
 import { seedConfig } from './config/seed.config.js';
 import { DatabaseModule } from './database/database.module.js';
-import { AiModule } from './modules/ai/ai.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './modules/auth/guards/roles.guard.js';
@@ -41,7 +41,7 @@ import { UsersModule } from './modules/users/users.module.js';
         seedConfig,
         aiConfig,
       ],
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: '.env',
     }),
     DatabaseModule,
     AuthModule,
@@ -53,7 +53,7 @@ import { UsersModule } from './modules/users/users.module.js';
     LedgerModule,
     PaymentsModule,
     DashboardModule,
-    AiModule,
+    AssistantModule,
     HealthModule,
   ],
   providers: [

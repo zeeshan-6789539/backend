@@ -45,17 +45,17 @@ export class DashboardRepository {
       this.db
         .select({ total: count() })
         .from(tenants)
-        .where(and(eq(tenants.companyId, companyId), eq(tenants.status, true))),
+        .where(and(eq(tenants.companyId, companyId), eq(tenants.isActive, true))),
       this.db.select({ total: count() }).from(properties).where(eq(properties.companyId, companyId)),
       this.db
         .select({ total: count() })
         .from(leases)
         .where(and(eq(leases.companyId, companyId), eq(leases.status, LeaseStatus.ACTIVE))),
       this.db
-        .select({ status: properties.status, count: count() })
+        .select({ status: properties.isActive, count: count() })
         .from(properties)
         .where(eq(properties.companyId, companyId))
-        .groupBy(properties.status),
+        .groupBy(properties.isActive),
       this.db
         .select({ count: count(), total: sql<string>`coalesce(sum(${payments.amountPaid}), 0)` })
         .from(payments)
@@ -90,7 +90,7 @@ export class DashboardRepository {
           paymentMethod: payments.paymentMethod,
           tenantName: tenants.name,
           propertyName: properties.name,
-          status: payments.status,
+          status: payments.isActive,
         })
         .from(payments)
         .innerJoin(tenants, eq(payments.tenantId, tenants.id))

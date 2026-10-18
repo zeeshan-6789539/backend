@@ -2,3 +2,5 @@
 allowBuilds:
   esbuild: true
   '@scarf/scarf': false
+  '@google/genai': false
+  protobufjs: false

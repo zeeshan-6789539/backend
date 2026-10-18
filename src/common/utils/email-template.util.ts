@@ -4,7 +4,7 @@ const POWERED_BY_TEXT = 'Powered by MIFA Alliance';
 
 // Shared modern HTML wrapper so every transactional email looks consistent
 export function buildEmailTemplate(options: IEmailTemplateOptions): string {
-  const { title, greetingName, bodyHtml, footerNote } = options;
+  const { appName, title, greetingName, bodyHtml, footerNote } = options;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -20,7 +20,7 @@ export function buildEmailTemplate(options: IEmailTemplateOptions): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(16,24,40,0.08);">
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 32px;">
-                <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">RMS</h1>
+                <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">${appName}</h1>
               </td>
             </tr>
             <tr>

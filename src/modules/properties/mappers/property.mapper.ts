@@ -12,7 +12,7 @@ export const toPropertyResponse = (row: IPropertyRow): PropertyResponseDto => ({
   city: row.city,
   propertyType: row.propertyType,
   rentDueDay: row.rentDueDay,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -28,7 +28,7 @@ export const toPropertyListResponse = (
   city: row.city,
   propertyType: row.propertyType,
   rentDueDay: row.rentDueDay,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   tenants: row.tenants,

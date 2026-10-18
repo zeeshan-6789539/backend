@@ -47,7 +47,7 @@ export class LedgerRepository {
         billingMonth: charges.billingMonth,
         dueDate: charges.dueDate,
         description: charges.description,
-        status: charges.status,
+        status: charges.isActive,
         createdAt: charges.createdAt,
         createdBy: charges.createdBy,
         propertyName: properties.name,
@@ -79,7 +79,7 @@ export class LedgerRepository {
         dueDate: payments.paymentDate,
         referenceNumber: payments.referenceNumber,
         paymentMethod: payments.paymentMethod,
-        status: payments.status,
+        status: payments.isActive,
         createdAt: payments.createdAt,
         createdBy: payments.createdBy,
         propertyName: properties.name,
@@ -144,7 +144,7 @@ export class LedgerRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(charges)
-        .set({ status })
+        .set({ isActive: status })
         .where(and(eq(charges.id, id), eq(charges.companyId, companyId)))
         .returning();
 
@@ -205,7 +205,7 @@ export class LedgerRepository {
         and(
           eq(charges.chargeType, ChargeType.MONTHLY_RENT),
           eq(charges.billingMonth, billingMonth),
-          eq(charges.status, true),
+          eq(charges.isActive, true),
         ),
       );
 

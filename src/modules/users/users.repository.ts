@@ -64,7 +64,7 @@ export class UsersRepository {
     const [row] = await this.db
       .select({ value: count() })
       .from(users)
-      .where(and(eq(users.companyId, companyId), eq(users.status, true)));
+      .where(and(eq(users.companyId, companyId), eq(users.isActive, true)));
 
     return row?.value ?? 0;
   }
@@ -97,7 +97,7 @@ export class UsersRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(users)
-        .set({ status })
+        .set({ isActive: status })
         .where(eq(users.id, id))
         .returning();
 
@@ -124,7 +124,7 @@ export class UsersRepository {
     }
 
     if (options.status !== undefined) {
-      conditions.push(eq(users.status, options.status));
+      conditions.push(eq(users.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

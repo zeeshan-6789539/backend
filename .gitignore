@@ -10,10 +10,15 @@ yarn.lock
 dist/
 *.tsbuildinfo
 
+# Environment — .env holds secrets; only the template is committed
+.env*
+!.env.example
+
 # Logs
 logs/
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
 # Coverage
 coverage/
@@ -23,10 +28,14 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# Claude Code — shared settings.json is committed, personal overrides are not
+.claude/settings.local.json
+
 # Drizzle
 .drizzle/
 
 # Nested prototype repo — has its own .git, not part of this repo's history
 rms/
 
-.vercel
+# Vercel
+.vercel/

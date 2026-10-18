@@ -8,8 +8,8 @@ export const OUTSTANDING_BALANCE_SQL = sql<string>`(
   COALESCE((
     SELECT SUM(CASE WHEN ${charges.transactionType} = ${TransactionType.DEBIT} THEN ${charges.amount} ELSE -${charges.amount} END)
     FROM ${charges}
-    WHERE ${charges.leaseId} = ${leases.id} AND ${charges.status} = true
+    WHERE ${charges.leaseId} = ${leases.id} AND ${charges.isActive} = true
   ), 0)
   -
-  COALESCE((SELECT SUM(${payments.amountPaid}) FROM ${payments} WHERE ${payments.leaseId} = ${leases.id} AND ${payments.status} = true), 0)
+  COALESCE((SELECT SUM(${payments.amountPaid}) FROM ${payments} WHERE ${payments.leaseId} = ${leases.id} AND ${payments.isActive} = true), 0)
 )::numeric(10, 2)`;

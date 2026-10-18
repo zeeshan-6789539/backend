@@ -41,7 +41,7 @@ export class UsersService {
       name: dto.name,
       phone: dto.phone,
       role,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     // Only the super admin manages users, so its mail always goes from the env account
@@ -102,7 +102,7 @@ export class UsersService {
       name: dto.name,
       phone: dto.phone,
       role: dto.role,
-      status: dto.status,
+      isActive: dto.status,
       updatedAt: new Date(),
     });
 
@@ -128,7 +128,7 @@ export class UsersService {
   async remove(id: string): Promise<UserResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `User ${current.name} is already deactivated`,
       );
@@ -146,7 +146,7 @@ export class UsersService {
   async restore(id: string): Promise<UserResponseDto> {
     const current = await this.findRowOrFail(id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`User ${current.name} is already active`);
     }
 

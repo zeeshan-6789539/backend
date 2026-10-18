@@ -35,7 +35,7 @@ export class PaymentsRepository {
       bankName: payments.bankName,
       chequeClearanceDate: payments.chequeClearanceDate,
       notes: payments.notes,
-      status: payments.status,
+      status: payments.isActive,
       createdAt: payments.createdAt,
       createdBy: payments.createdBy,
     };
@@ -96,7 +96,7 @@ export class PaymentsRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(payments)
-        .set({ status })
+        .set({ isActive: status })
         .where(and(eq(payments.id, id), eq(payments.companyId, companyId)))
         .returning();
 

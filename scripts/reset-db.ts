@@ -1,13 +1,13 @@
 import { config } from 'dotenv';
 import pg from 'pg';
 
-// Same precedence as ConfigModule in app.module.ts — first file wins
-config({ path: ['.env.local', '.env'], quiet: true });
+// Same file as ConfigModule in app.module.ts
+config({ path: '.env', quiet: true });
 
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error('DATABASE_URL is not set — check .env or .env.local');
+  throw new Error('DATABASE_URL is not set — check .env');
 }
 
 if (process.env.NODE_ENV === 'production') {
@@ -21,41 +21,29 @@ if (!databaseName) {
   throw new Error(`DATABASE_URL has no database name: ${databaseUrl}`);
 }
 
-const target = new pg.Client({ connectionString: targetUrl.toString() });
-await target.connect();
+if (databaseName === 'postgres') {
+  throw new Error('reset-db refuses to drop the "postgres" maintenance database');
+}
+
+// A database cannot drop itself, so connect to the maintenance database instead
+const maintenanceUrl = new URL(targetUrl);
+maintenanceUrl.pathname = '/postgres';
+
+const maintenance = new pg.Client({ connectionString: maintenanceUrl.toString() });
+await maintenance.connect();
 
 try {
-  const { rows } = await target.query<{ server: string }>('select version() as server');
+  const { rows } = await maintenance.query<{ server: string }>('select version() as server');
   console.log(`Server: ${rows[0].server.split(',')[0]}`);
   console.log(`Target: ${databaseName} @ ${targetUrl.host}`);
 
-  const { rows: tables } = await target.query<{ tablename: string }>(
-    "select tablename from pg_tables where schemaname = 'public'",
-  );
+  const quotedName = maintenance.escapeIdentifier(databaseName);
 
-  if (tables.length === 0) {
-    console.log('No tables found — nothing to truncate');
-  } else {
-    const tableList = tables.map(({ tablename }) => `"${tablename}"`).join(', ');
-    await target.query(`truncate table ${tableList} restart identity cascade`);
-    console.log(`Truncated ${tables.length} table(s): ${tables.map((t) => t.tablename).join(', ')}`);
-  }
-
-  // drizzle-kit push can leave a stale, non-partial version of this index behind — repair it so deactivated charges stay re-generatable
-  if (tables.some(({ tablename }) => tablename === 'charges')) {
-    const { rows: existingIndexes } = await target.query<{ indexdef: string }>(
-      "select indexdef from pg_indexes where tablename = 'charges' and indexname = 'charges_one_monthly_rent_per_lease_month_idx'",
-    );
-    const isPartialOnStatus = existingIndexes[0]?.indexdef.includes('status = true') ?? false;
-
-    if (!isPartialOnStatus) {
-      await target.query('drop index if exists charges_one_monthly_rent_per_lease_month_idx');
-      await target.query(
-        "create unique index charges_one_monthly_rent_per_lease_month_idx on charges (lease_id, billing_month) where charge_type = 'monthly_rent' and status = true",
-      );
-      console.log('Recreated charges_one_monthly_rent_per_lease_month_idx as a partial index (status = true)');
-    }
-  }
+  // FORCE disconnects open sessions such as a running dev server
+  await maintenance.query(`drop database if exists ${quotedName} with (force)`);
+  await maintenance.query(`create database ${quotedName}`);
+  console.log(`Dropped and recreated database "${databaseName}"`);
+  console.log('Next: pnpm db:push, then pnpm db:seed');
 } finally {
-  await target.end();
+  await maintenance.end();
 }

@@ -98,7 +98,7 @@ export class LedgerService {
   async removeCharge(companyId: string, id: string): Promise<LedgerEntryResponseDto> {
     const current = await this.findChargeRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(`Charge ${current.id} is already deactivated`);
     }
 
@@ -114,7 +114,7 @@ export class LedgerService {
   async restoreCharge(companyId: string, id: string): Promise<LedgerEntryResponseDto> {
     const current = await this.findChargeRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`Charge ${current.id} is already active`);
     }
 
@@ -203,7 +203,7 @@ export class LedgerService {
         billingMonth: row.billingMonth,
         dueDate: row.dueDate,
         description: row.description,
-        status: row.status,
+        status: row.isActive,
         createdAt: row.createdAt,
         createdBy: row.createdBy,
       });

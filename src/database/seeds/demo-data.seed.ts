@@ -653,7 +653,8 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
       phone: plan.phone,
       address: plan.address,
       city: plan.city,
-      status: true,
+      isActive: true,
+      voiceAssistantEnabled: true,
       // Seeded properties take 1..n below, so the app continues from n + 1
       nextPropertyNumber: plan.properties.length + 1,
     })
@@ -677,7 +678,7 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
         name: `${userPlan.firstName} ${userPlan.lastName}`,
         phone: pkPhone(rng),
         role: userPlan.role,
-        status: true,
+        isActive: true,
       })
       .returning({ id: users.id });
 
@@ -702,7 +703,7 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
         name,
         email: `${slugifyName(name)}@gmail.com`,
         phone: pkPhone(rng),
-        status: true,
+        isActive: true,
       })
       .returning({ id: tenants.id });
 
@@ -726,7 +727,7 @@ async function seedCompany(tx: SeedTx, rng: () => number, now: Date, billingMont
         city: propertyPlan.city,
         propertyType: propertyPlan.propertyType,
         rentDueDay: SEED_RENT_DUE_DAY,
-        status: true,
+        isActive: true,
       })
       .returning({ id: properties.id });
 

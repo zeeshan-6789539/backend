@@ -16,5 +16,6 @@ export const mailConfig = registerAs(MAIL_CONFIG_NAMESPACE, (): IMailConfig => {
     from: env.MAIL_FROM,
     encryptionKey: env.MAIL_ENCRYPTION_KEY,
     frontendUrl: env.FRONTEND_URL,
+    appName: env.APP_NAME,
   };
 });

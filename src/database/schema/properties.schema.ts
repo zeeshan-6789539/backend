@@ -43,8 +43,8 @@ export const properties = pgTable(
       .default(PropertyType.HOME),
     // Day of the month the generated monthly rent invoice falls due
     rentDueDay: smallint('rent_due_day').notNull().default(DEFAULT_RENT_DUE_DAY),
-    // true is active, false is deactivated — mirrors companies.status
-    status: boolean('status').notNull().default(true),
+    // true is active, false is deactivated — mirrors companies.is_active
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -55,7 +55,7 @@ export const properties = pgTable(
   },
   (table) => [
     index('properties_name_idx').on(table.name),
-    index('properties_status_idx').on(table.status),
+    index('properties_is_active_idx').on(table.isActive),
     index('properties_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),

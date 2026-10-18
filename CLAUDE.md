@@ -76,7 +76,7 @@ Controller checklist:
 - **ESM.** Every relative import ends in `.js`, including from `.ts` files. TypeScript is `nodenext`.
 - **pnpm only.** Never run `npm install` — it writes a `package-lock.json` that conflicts with `pnpm-lock.yaml`.
 - **Schema changes: no migration files.** Edit the Drizzle schema directly; the user runs `db:push` and `db:seed` themselves.
-- **`status`, not `deleted_at`.** One boolean per row — `true` active, `false` deactivated. `DELETE` flips it to false, `PATCH /:id/restore` flips it back. Rows are never physically removed. Reads do *not* filter on `status`, so an admin can still see and restore a deactivated row; auth paths reject `status: false` explicitly.
+- **`isActive`, not `deleted_at`.** One boolean column per row (`isActive: boolean('is_active')`) — `true` active, `false` deactivated. `DELETE` flips it to false, `PATCH /:id/restore` flips it back. Rows are never physically removed. Reads do *not* filter on it, so an admin can still see and restore a deactivated row; auth paths reject inactive users explicitly. The API keeps the name `status` in DTOs, query filters and responses; mappers translate (`status: row.isActive`).
 - **UUIDv7 ids.** Validate with `@IsUUID()` (any version) — `@IsUUID('4')` rejects every id this app issues.
 - **UTC everywhere.** Columns are `timestamptz`, the PG session and the Node process are both pinned to UTC.
 - **Reusable helpers go in `common/utils/`**, written generically. Never inline a second copy at a call site.

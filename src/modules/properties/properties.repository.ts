@@ -124,7 +124,7 @@ export class PropertiesRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(properties)
-        .set({ status })
+        .set({ isActive: status })
         .where(and(eq(properties.id, id), eq(properties.companyId, companyId)))
         .returning();
 
@@ -144,7 +144,7 @@ export class PropertiesRepository {
     }
 
     if (options.status !== undefined) {
-      conditions.push(eq(properties.status, options.status));
+      conditions.push(eq(properties.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

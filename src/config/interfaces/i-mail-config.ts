@@ -7,4 +7,5 @@ export interface IMailConfig {
   from: string;
   encryptionKey: string;
   frontendUrl: string;
+  appName: string;
 }

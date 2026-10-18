@@ -9,7 +9,7 @@ export const toTenantResponse = (row: ITenantRow): TenantResponseDto => ({
   name: row.name,
   email: row.email,
   phone: row.phone,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -20,7 +20,7 @@ export const toTenantListResponse = (row: ITenantListRow): TenantListResponseDto
   name: row.name,
   email: row.email,
   phone: row.phone,
-  status: row.status,
+  status: row.isActive,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   properties: row.properties,

@@ -25,6 +25,11 @@ export class CompanyResponseDto {
   @ApiProperty({ description: 'true emails the monthly rent invoice to this company\'s tenants' })
   invoiceMailSend!: boolean;
 
+  @ApiProperty({
+    description: "true lets the company's client admins use the voice assistant",
+  })
+  voiceAssistantEnabled!: boolean;
+
   @ApiProperty({ description: 'true when an SMTP password is stored for the company email' })
   hasMailPassword!: boolean;
 

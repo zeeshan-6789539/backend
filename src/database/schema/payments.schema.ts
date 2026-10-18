@@ -45,7 +45,7 @@ export const payments = pgTable(
     notes: text('notes'),
     // Single lifecycle flag: true is active, false is deactivated. A deactivated
     // payment stays visible in the ledger but is excluded from running-balance calculations.
-    status: boolean('status').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
     createdBy: uuid('created_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -53,7 +53,7 @@ export const payments = pgTable(
   },
   (table) => [
     index('payments_lease_id_idx').on(table.leaseId),
-    index('payments_status_idx').on(table.status),
+    index('payments_is_active_idx').on(table.isActive),
     index('payments_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),

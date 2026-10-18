@@ -24,7 +24,7 @@ export class TenantsService {
       name: dto.name.trim(),
       email: dto.email ? normalizeEmail(dto.email) : undefined,
       phone: dto.phone,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toTenantResponse(row);
@@ -67,7 +67,7 @@ export class TenantsService {
       name: dto.name?.trim(),
       email: dto.email ? normalizeEmail(dto.email) : undefined,
       phone: dto.phone,
-      status: dto.status,
+      isActive: dto.status,
       updatedAt: new Date(),
     });
 
@@ -84,7 +84,7 @@ export class TenantsService {
   async remove(companyId: string, id: string): Promise<TenantResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `Tenant "${current.name}" is already deactivated`,
       );
@@ -102,7 +102,7 @@ export class TenantsService {
   async restore(companyId: string, id: string): Promise<TenantResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(`Tenant "${current.name}" is already active`);
     }
 

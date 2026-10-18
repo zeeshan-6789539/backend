@@ -21,8 +21,12 @@ export const companies = pgTable(
     phone: varchar('phone', { length: 32 }),
     address: varchar('address', { length: 500 }),
     city: varchar('city', { length: 100 }),
-    // true is active, false is deactivated — mirrors users.status
-    status: boolean('status').notNull().default(true),
+    // true is active, false is deactivated — mirrors users.is_active
+    isActive: boolean('is_active').notNull().default(true),
+    // Gates the Gemini voice assistant for this company's client admins
+    voiceAssistantEnabled: boolean('voice_assistant_enabled')
+      .notNull()
+      .default(false),
     // Opt-in per company: the monthly rent run emails invoices only when this is true
     invoiceMailSend: boolean('invoice_mail_send').notNull().default(false),
     // AES-256-GCM ciphertext of the SMTP password for `email`; never returned by the API
@@ -39,7 +43,7 @@ export const companies = pgTable(
   },
   (table) => [
     index('companies_name_idx').on(table.name),
-    index('companies_status_idx').on(table.status),
+    index('companies_is_active_idx').on(table.isActive),
     index('companies_created_at_idx').on(
       table.createdAt.desc(),
       table.id.desc(),

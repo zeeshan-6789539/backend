@@ -97,7 +97,7 @@ export class TenantsRepository {
     return withDatabaseErrors(async () => {
       const [row] = await this.db
         .update(tenants)
-        .set({ status })
+        .set({ isActive: status })
         .where(and(eq(tenants.id, id), eq(tenants.companyId, companyId)))
         .returning();
 
@@ -109,7 +109,7 @@ export class TenantsRepository {
     const conditions: SQL[] = [eq(tenants.companyId, options.companyId)];
 
     if (options.status !== undefined) {
-      conditions.push(eq(tenants.status, options.status));
+      conditions.push(eq(tenants.isActive, options.status));
     }
 
     const search = buildSearchCondition(options.search, SEARCHABLE_COLUMNS);

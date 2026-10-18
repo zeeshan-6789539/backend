@@ -12,7 +12,7 @@ export const seedSuperAdmin = async (
 ): Promise<void> => {
   if (!config.superAdminPassword) {
     throw new Error(
-      'SEED_SUPER_ADMIN_PASSWORD is not set — add it to .env.local before seeding',
+      'SEED_SUPER_ADMIN_PASSWORD is not set — add it to .env before seeding',
     );
   }
 

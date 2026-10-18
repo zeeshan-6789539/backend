@@ -30,7 +30,8 @@ flowchart LR
   API -->|Drizzle / pg pool| DB[(PostgreSQL)]
   API -->|nodemailer SMTP| Mail["Mail host<br/>(welcome / password / rent invoice)"]
   Mail --> Inbox["User & tenant inboxes"]
-  API -->|"@google/genai HTTPS"| Gemini["Google Gemini API<br/>(AI assistant)"]
+  API -->|"@google/genai HTTPS<br/>(ephemeral token)"| Gemini["Google Gemini Live API<br/>(voice assistant)"]
+  Browser -->|"WebSocket with the token"| Gemini
 ```
 
 Every request goes through the same pipeline:
@@ -72,14 +73,14 @@ Every company-scoped query is filtered by the caller's `companyId`, taken from t
 
 ```bash
 pnpm install
-# create .env.local (or .env) and fill in the variables listed under Configuration
+cp .env.example .env     # then fill in the variables listed under Configuration
 pnpm db:push             # push src/database/schema straight to the database
 pnpm db:seed             # create the super admin from SEED_SUPER_ADMIN_*
 pnpm db:seed:demo        # optional: 12 months of demo data for 3 companies
 pnpm start:dev
 ```
 
-With the local `.env.local` (`PORT=5000`):
+With the local `.env` (`PORT=5000`):
 
 - API: `http://localhost:5000/api/v1`
 - Swagger UI: `http://localhost:5000/docs`
@@ -123,11 +124,12 @@ npx tsc --noEmit && pnpm lint && pnpm test
 
 ## Configuration
 
-Every variable is declared and validated in [src/config/env.validation.ts](src/config/env.validation.ts). Startup fails with **every** invalid variable listed at once. Files are read in the order `.env.local`, then `.env` (first one wins).
+Every variable is declared and validated in [src/config/env.validation.ts](src/config/env.validation.ts). Startup fails with **every** invalid variable listed at once. `.env` is the only env file the app, drizzle-kit and `db:reset` read; it is gitignored, and [.env.example](.env.example) is the committed template. Production values live in the hosting dashboard (Vercel), never in a committed file.
 
 | Group | Variable | Default | Notes |
 | --- | --- | --- | --- |
 | App | `NODE_ENV` | `development` | `development` / `test` / `production` |
+| | `APP_NAME` | `RMS` | Product name in emails and the Swagger title |
 | | `PORT` | `3000` | Local setup uses `5000` |
 | | `API_PREFIX` / `API_VERSION` | `api` / `1` | Gives `/api/v1/...` |
 | | `CORS_ORIGINS` | `*` | Comma-separated; must include the frontend origin |
@@ -141,15 +143,15 @@ Every variable is declared and validated in [src/config/env.validation.ts](src/c
 | JWT | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | **required** | At least 32 chars each |
 | | `JWT_ACCESS_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` | `15m` / `7d` | |
 | | `JWT_ISSUER` | `rms-backend` | |
-| Seed | `SEED_SUPER_ADMIN_EMAIL` / `_PASSWORD` / `_NAME` | `superadmin@rms.local` / — / `Super Admin` | Password needed only by `db:seed` |
+| Seed | `SEED_SUPER_ADMIN_EMAIL` / `_PASSWORD` / `_NAME` | `superadmin@mifa.mifa` / — / `Super Admin` | Password needed only by `db:seed` |
 | Mail | `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD` | **required** | Platform SMTP account |
 | | `MAIL_PORT` / `MAIL_SECURE` | `587` / `false` | |
 | | `MAIL_FROM` | `no-reply@rms.local` | |
 | | `MAIL_ENCRYPTION_KEY` | **required** | 64 hex chars. Encrypts `companies.mail_password`; **changing it makes every stored company mail password undecryptable** |
 | | `FRONTEND_URL` | **required** | Used for the "Sign in" button in emails |
-| AI | `GOOGLE_STUDIO_KEY` | — | Gemini API key from Google AI Studio. Optional: without it the API boots and `POST /ai/chat` answers 503 |
-| | `GEMINI_MODEL` | `gemini-flash-lite-latest` | Chat and transcription. Any Gemini model id the key can use. Flash-lite answers in about 1 to 3 s per call, which suits voice |
-| | `GEMINI_TTS_MODEL` / `GEMINI_TTS_VOICE` | `gemini-3.8-flash-tts` / `Kore` | Spoken replies. `Kore` is a female voice, `Charon` a male one; both read Urdu with a Pakistani accent |
+| Voice assistant | `GOOGLE_STUDIO_KEY` | — | Gemini API key from Google AI Studio. Optional: without it the API boots and `POST /assistant/session` answers 503 |
+| | `GEMINI_LIVE_MODEL` | `gemini-3.8-live` | Live model the browser talks to |
+| | `GEMINI_SESSION_TTL_MINUTES` | `30` | 1-120. How long one voice session lasts |
 
 To add a variable, declare it in `env.validation.ts` first, then expose it through the matching `registerAs` namespace in `src/config/`.
 
@@ -178,7 +180,7 @@ rms-backend/
     │   │                          # @RateLimit @RequestTimeout @SkipResponseTransform @IsMoneyString
     │   ├── dto/                   # PaginationQueryDto, UuidParamDto, AssignedEntityDto
     │   ├── enums/                 # UserRole, LeaseStatus, ChargeType, TransactionType, PaymentMethod,
-    │   │                          # PropertyType, SortOrder, ErrorCode, DashboardTrendRange, AiChatRole
+    │   │                          # PropertyType, SortOrder, ErrorCode, DashboardTrendRange
     │   ├── filters/               # AllExceptionsFilter → error envelope
     │   ├── guards/                # RateLimitGuard (in-memory buckets)
     │   ├── interceptors/          # ResponseInterceptor (success envelope), TimeoutInterceptor
@@ -186,9 +188,7 @@ rms-backend/
     │   ├── middleware/            # request logger
     │   └── utils/                 # pagination, query (search), database-error, hash (argon2), jwt,
     │                              # uuid (v7), encryption (AES-256-GCM), email-template, date,
-    │                              # outstanding-balance SQL, background (Vercel waitUntil), logger,
-    │                              # ai-tool (zod schema → Gemini function declaration),
-    │                              # audio (WAV header, peak level for silence detection)
+    │                              # outstanding-balance SQL, background (Vercel waitUntil), logger
     ├── database/
     │   ├── database.module.ts     # Global module: DRIZZLE + PG_POOL, session pinned to UTC
     │   ├── schema/                # One file per table + barrel index.ts
@@ -205,8 +205,7 @@ rms-backend/
         ├── ledger/                # charges + running-balance statement, monthly rent generation
         ├── payments/              # client_admin: payments against a lease
         ├── dashboard/             # client_admin: aggregated company stats
-        ├── ai/                    # client_admin: Gemini assistant with read-only tools over the modules above,
-        │                          # plus voice (transcribe Urdu/English speech, speak replies in an Urdu accent)
+        ├── assistant/             # client_admin: single-use Gemini Live token for the voice assistant
         ├── mail/                  # SMTP sending (platform or per-company sender), throttled queue
         └── health/                # Terminus liveness / readiness
 ```
@@ -252,7 +251,8 @@ erDiagram
     varchar phone
     varchar address
     varchar city
-    boolean status
+    boolean is_active
+    boolean voice_assistant_enabled
     boolean invoice_mail_send
     text mail_password "AES-256-GCM, never returned"
     int next_property_number
@@ -267,7 +267,7 @@ erDiagram
     varchar name
     varchar phone
     user_role role
-    boolean status
+    boolean is_active
     timestamptz last_login_at
     timestamptz created_at
     timestamptz updated_at
@@ -291,7 +291,7 @@ erDiagram
     varchar city
     property_type property_type
     smallint rent_due_day "1-28"
-    boolean status
+    boolean is_active
     timestamptz created_at
     timestamptz updated_at
   }
@@ -301,7 +301,7 @@ erDiagram
     varchar name
     varchar email
     varchar phone
-    boolean status
+    boolean is_active
     timestamptz created_at
     timestamptz updated_at
   }
@@ -341,7 +341,7 @@ erDiagram
     date billing_month
     date due_date
     text description
-    boolean status
+    boolean is_active
     uuid created_by FK
     timestamptz created_at
   }
@@ -359,7 +359,7 @@ erDiagram
     text bank_name
     date cheque_clearance_date
     text notes
-    boolean status
+    boolean is_active
     uuid created_by FK
     timestamptz created_at
   }
@@ -412,7 +412,7 @@ Every table has a `(created_at DESC, id DESC)` index, and company-scoped tables 
 ### Design rules
 
 - **Primary keys are UUIDv7** ([uuid.util.ts](src/common/utils/uuid.util.ts)). They are time-ordered, so inserts append to the B-tree like a sequence while ids stay globally unique and non-enumerable. They sort chronologically as strings. DTOs validate with `@IsUUID()` (any version); `@IsUUID('4')` would reject every id this app issues.
-- **`status`, not `deleted_at`.** One boolean per row: `true` is active and `false` is deactivated. `DELETE` sets it to false and `PATCH /:id/restore` sets it back. Rows are never physically removed. Reads do not filter on `status`, so an admin can still see and restore a row. Auth paths reject `status: false` explicitly. Leases are the exception: they use `lease_status` instead.
+- **`is_active`, not `deleted_at`.** One boolean column per row (`isActive` in the Drizzle schema): `true` is active and `false` is deactivated. `DELETE` sets it to false and `PATCH /:id/restore` sets it back. Rows are never physically removed. Reads do not filter on it, so an admin can still see and restore a row. Auth paths reject inactive users explicitly. The API still calls the field `status` (request bodies, `?status=` filters and responses); mappers translate between the two. Leases are the exception: they use `lease_status` instead.
 - **Money is `numeric(10,2)`**, sent and received as strings (`"2500.00"`), validated by `@IsMoneyString()`.
 - **Balances are computed, not stored.** [`OUTSTANDING_BALANCE_SQL`](src/common/utils/outstanding-balance.util.ts) is `Σ active debits − Σ active credits − Σ active payments` for a lease.
 - **UTC everywhere.** Columns are `timestamptz`, the PG session runs with `timezone=UTC`, the Node process sets `TZ=UTC` before anything else loads, and tests do the same. Calendar values (`start_date`, `billing_month`, `due_date`, ...) are plain `date`.
@@ -439,7 +439,7 @@ sequenceDiagram
   participant A as AuthService
   participant DB as refresh_tokens
   C->>A: POST /auth/login {email, password}  (5 req/min)
-  A->>A: argon2 verify, reject status=false
+  A->>A: argon2 verify, reject is_active=false
   A->>DB: insert {id: jti, token_hash, expires_at, ua, ip}
   A-->>C: {accessToken (15m), refreshToken (7d), user}
   Note over C: access token expires
@@ -456,14 +456,14 @@ sequenceDiagram
 
 - Users sign in with **email** (unique, normalised to lower case).
 - The access token carries `{ sub, role, companyId }`. The refresh token carries `{ sub, jti }` and is stored argon2-hashed.
-- `POST /auth/logout` revokes one refresh token. `POST /auth/logout-all` revokes all of them. `GET /auth/me` returns the user plus `companyName`.
+- `POST /auth/logout` revokes one refresh token. `POST /auth/logout-all` revokes all of them. `GET /auth/me` returns the user plus `companyName` and `voiceAssistantEnabled`.
 - `JwtAuthGuard` and `RolesGuard` are global, so every route is protected unless it has `@Public()`.
 
 ### 2. Platform setup (super_admin)
 
 ```
 db:seed → super_admin
-   └─ POST /companies          create company (optional SMTP email + mail_password, invoice_mail_send)
+   └─ POST /companies          create company (optional SMTP email + mail_password, invoice_mail_send, voice_assistant_enabled)
        └─ POST /users          create client_admin with companyId → welcome email with credentials
 ```
 
@@ -524,29 +524,13 @@ flowchart TD
 - **Breakdown:** active vs deactivated property counts.
 - **Lists:** the 5 most recent payments and the 5 leases with the highest outstanding balance.
 
-### 7. AI assistant
+### 7. Voice assistant (Gemini Live)
 
-Full walkthrough, including tools, tables, prompts and measured token usage per language: [AI.md](AI.md).
+`POST /assistant/session` (`client_admin` only, throttled to 10 a minute) answers 403 unless the caller's company has `voiceAssistantEnabled` (`companies.voice_assistant_enabled`, default `false`, set by a super admin through `POST`/`PATCH /companies`; `GET /auth/me` returns it for the user's company). Otherwise it issues a **single-use ephemeral Gemini Live token** so the browser can open a voice session straight to Gemini. The real API key (`GOOGLE_STUDIO_KEY`) never leaves the server: the token must open its session within 60 seconds and the session stops after `GEMINI_SESSION_TTL_MINUTES`. The response is `{ token, model, expiresAt }`.
 
-`POST /ai/chat` (client_admin) answers plain-language questions about the caller's company, such as "who still owes rent?", "summarise this month" or "when did Ahmed Raza last pay?".
+The backend does no AI work itself. Gemini's tool calls run in the browser and go through the normal REST routes with the user's own JWT, so the role guards and company scoping above still apply to anything said by voice. Without `GOOGLE_STUDIO_KEY` the API still boots, and the route answers 503 with a message saying which variable to set; a key Gemini rejects answers 502. The code is in [src/modules/assistant/](src/modules/assistant/).
 
-```json
-{ "message": "And when did they last pay?", "history": [{ "role": "user", "text": "..." }, { "role": "model", "text": "..." }] }
-```
-
-- **Stateless.** The client sends earlier turns in `history`, oldest first, up to 20. The reply is `{ reply, toolsUsed }`.
-- **Languages.** English, Urdu script and Roman Urdu (Urdu typed in Latin letters, e.g. "is mahine kis ka kiraya baqi hai?"). The reply matches the language and script of the question, including mixed Urdu-English.
-- **Tool calling.** Gemini never touches the database. It calls tools declared in [ai-tools.service.ts](src/modules/ai/ai-tools.service.ts), and each tool calls an existing service (`DashboardService`, `PropertiesService`, `TenantsService`, `LeasesService`, `PaymentsService`, `LedgerService`) with the caller's `companyId`. Validation, scoping and error messages therefore stay the same as in the REST routes.
-- **Read-only for now.** Writes (create a tenant, record a payment) need a confirmation step before Gemini may trigger them, so the assistant points the user to the matching screen instead.
-- **Errors.** A tool failure such as a `NotFound` is handed back to Gemini, which explains it. A Gemini overload or timeout returns 503 with a retry hint, after up to 3 attempts. Running out of quota returns 429. A missing `GOOGLE_STUDIO_KEY` returns 503.
-- **Limits.** 20 requests per minute per client on each AI route, and a 60 s route timeout instead of `REQUEST_TIMEOUT_MS`, because one answer can take several Gemini calls.
-
-Two voice routes, both handled by [ai-voice.service.ts](src/modules/ai/ai-voice.service.ts), sit beside the chat. Both use Gemini rather than browser speech, because browser speech recognition handles mixed Urdu-English poorly and most systems have no Urdu voice.
-
-- **`POST /ai/transcribe`** `{ audioBase64, mimeType, script }` → `{ transcript }`. It sends the recording (the frontend sends 16 kHz mono WAV, at most 30 s) to `GEMINI_MODEL`. `script` is `urdu` or `roman` and controls how Urdu words are written; English words stay English. A near-silent WAV is rejected before Gemini is called, because Gemini invents words for silence. A transcript with no letters is rejected too. Both return 400 "couldn't hear a question".
-- **`POST /ai/speech`** `{ text }` → `{ mimeType: "audio/wav", audioBase64 }`. It reads a reply aloud with `GEMINI_TTS_MODEL` / `GEMINI_TTS_VOICE` and a Pakistani Urdu accent, for English, Urdu script and Roman Urdu alike. The prompt tells the model to read the text verbatim; without that, it tends to answer the text instead. Text is capped at 600 characters (~35 s of audio) to stay under Vercel's 4.5 MB response limit. A typical three-sentence reply takes 5 to 12 s, so the client shows the text first. The route timeout is 100 s.
-- **Body limit.** JSON bodies may be up to 2 MB (`JSON_BODY_LIMIT` in [main.ts](src/main.ts)) so a 30 s clip fits. Express's default is 100 KB.
-- Shared Gemini access and error mapping (429, 503 retry hint, missing key) live in [gemini-client.service.ts](src/modules/ai/gemini-client.service.ts).
+`pnpm db:seed:demo` turns the voice assistant on for every demo company.
 
 ---
 
@@ -567,7 +551,7 @@ All routes are under `/api/v1` unless noted. Swagger at `/docs` is the authorita
 | | `POST /ledger/generate-monthly-rent` | super_admin |
 | **payments** | `POST` · `GET` · `GET /:id` · `PATCH /:id/restore` · `DELETE /:id` | client_admin |
 | **dashboard** | `GET /dashboard/stats` | client_admin |
-| **ai** | `POST /ai/chat` · `POST /ai/transcribe` · `POST /ai/speech` | client_admin (20/min each) |
+| **assistant** | `POST /assistant/session` | client_admin whose company has the voice assistant (10/min) |
 | **health** | `GET /health/liveness` · `GET /health/readiness` (no prefix) | Public |
 
 ### List endpoints

@@ -25,7 +25,7 @@ export class PropertiesService {
       city: dto.city,
       propertyType: dto.propertyType,
       rentDueDay: dto.rentDueDay,
-      status: dto.status,
+      isActive: dto.status,
     });
 
     return toPropertyResponse(row);
@@ -72,7 +72,7 @@ export class PropertiesService {
       city: dto.city,
       propertyType: dto.propertyType,
       rentDueDay: dto.rentDueDay,
-      status: dto.status,
+      isActive: dto.status,
       updatedAt: new Date(),
     });
 
@@ -89,7 +89,7 @@ export class PropertiesService {
   async remove(companyId: string, id: string): Promise<PropertyResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (!current.status) {
+    if (!current.isActive) {
       throw new ConflictException(
         `Property "${current.name}" is already deactivated`,
       );
@@ -107,7 +107,7 @@ export class PropertiesService {
   async restore(companyId: string, id: string): Promise<PropertyResponseDto> {
     const current = await this.findRowOrFail(companyId, id);
 
-    if (current.status) {
+    if (current.isActive) {
       throw new ConflictException(
         `Property "${current.name}" is already active`,
       );
